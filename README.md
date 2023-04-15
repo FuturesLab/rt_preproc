@@ -2,6 +2,7 @@
 
 To get started, install `poetry` and run `poetry install`.
 
-Then run `poetry shell` to activate the virtualenv.
+To try a command, run `poetry run runtime_preproc patch ./tests/c/foo.c`
 
-You can then run `python3 runtime_preproc/__init__.py`.
+You can run `poetry shell` to activate the virtualenv for development.
+
