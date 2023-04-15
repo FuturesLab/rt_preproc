@@ -4,13 +4,20 @@ version = "0.1.0"
 description = ""
 authors = ["Andrew Lee <candrewlee14@gmail.com>"]
 readme = "README.md"
-packages = [{include = "runtime_preproc"}]
+packages = [{include = "runtime_preproc", from = "src"}]
 
 [tool.poetry.dependencies]
 python = "^3.10"
 tree-sitter = "^0.20.1"
+cleo = "^2.0.1"
 
+[tool.poetry.group.test.dependencies]
+pytest = "^7.3.1"
 
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
+
+[tool.poetry.scripts]
+runtime_preproc = "runtime_preproc.console.application:main"
+test = { callable = "runtime_preproc:run_tests" }
