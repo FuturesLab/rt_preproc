@@ -1,4 +1,4 @@
-from tree_sitter import Language, Parser
+from tree_sitter import Language
 
 Language.build_library(
   # Store the library in the `build` directory
@@ -12,6 +12,4 @@ Language.build_library(
 
 C_LANGUAGE = Language('build/my-languages.so', 'c')
 
-parser = Parser()
-parser.set_language(C_LANGUAGE)
 

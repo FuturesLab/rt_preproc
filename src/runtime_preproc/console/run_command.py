@@ -1,6 +1,6 @@
 from cleo.commands.command import Command
 from cleo.helpers import argument
-from runtime_preproc.parser import parser
+from runtime_preproc.parser.desugarer import Desugarer
 
 class RunCommand(Command):
     name = "patch"
@@ -19,7 +19,8 @@ class RunCommand(Command):
         self.line(f"File: {file}")
         with open(file, mode="rb") as f:
             bytes = f.read()
-            tree = parser.parse(bytes)
+            ds = Desugarer()
+            tree = ds.parse(bytes)
             self.line("---- C FILE ----")
             self.line(tree.text.decode('utf8'))
             self.line("---- AST -------")
