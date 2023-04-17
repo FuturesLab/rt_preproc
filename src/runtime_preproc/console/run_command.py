@@ -25,3 +25,5 @@ class RunCommand(Command):
             self.line(tree.text.decode('utf8'))
             self.line("---- AST -------")
             self.line(tree.root_node.sexp())
+            self.line("---- QUERY FOR IFDEF CONDITIONS -------")
+            self.line(ds.ifdef_conds_query(tree))
