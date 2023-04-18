@@ -19,4 +19,13 @@ class Desugarer:
         """)
         caps = ifdef.captures(tree.root_node)
         conds = [node.text.decode('utf8') for node, name in caps if name == "cond"]
+        
+        funcs = (
+f"int rt_{cond}() {{"
+f" return getenv(\"{cond}\") != NULL;"
+f"}}"
+      for cond in conds)
+
+        # f"if ({new_name}) {{"
+
         return conds
