@@ -10,7 +10,6 @@ packages = [{include = "rt_preproc", from = "src"}]
 python = "^3.10"
 tree-sitter = "^0.20.1"
 cleo = "^2.0.1"
-tree-sitter-types = "^0.0.2"
 multimethod = "^1.9.1"
 
 [tool.poetry.group.test.dependencies]
@@ -21,6 +20,7 @@ pytest = "^7.3.1"
 poethepoet = "^0.19.0"
 black = "^23.3.0"
 pre-commit = "^3.2.2"
+tree-sitter-types = "^0.0.2"
 
 [build-system]
 requires = ["poetry-core"]
