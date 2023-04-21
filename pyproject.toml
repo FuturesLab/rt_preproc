@@ -27,7 +27,7 @@ requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
 
 [tool.poetry.scripts]
-rt_preproc = "rt_preproc.console.application:main"
+rt_preproc = "rt_preproc.cli.application:main"
 test = { callable = "rt_preproc:run_tests" }
 
 [tool.poe.tasks]

@@ -1,9 +1,9 @@
 from cleo.commands.command import Command
 from cleo.helpers import argument
-from rt_preproc.parser.desugarer import Desugarer
+from rt_preproc.parser.parser import Parser
 
 
-class RunCommand(Command):
+class PatchCmd(Command):
     name = "patch"
     description = (
         "Patch a file to convert compile-time C preprocessor macros to runtime logic"
@@ -16,7 +16,7 @@ class RunCommand(Command):
         self.line(f"File: {file}")
         with open(file, mode="rb") as f:
             bytes = f.read()
-            ds = Desugarer()
+            ds = Parser()
             tree = ds.parse(bytes)
             self.line("---- C FILE ----")
             self.line(tree.text.decode("utf8"))

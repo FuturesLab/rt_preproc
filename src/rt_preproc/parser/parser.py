@@ -1,33 +1,15 @@
-from tree_sitter import Parser, Tree, Node
+from tree_sitter import Parser as TSParser, Tree
 from rt_preproc.parser import C_LANGUAGE
-from rt_preproc.parser.ast import TreeSitterNode, type_name_to_class
-
-from rt_preproc.visitors.graphviz import GraphVizCtx, GraphVizVisitor
 
 
-class Desugarer:
+class Parser:
     def __init__(self):
-        parser = Parser()
+        parser = TSParser()
         parser.set_language(C_LANGUAGE)
         self.parser = parser
 
-    @staticmethod
-    def reify(ast: Node) -> TreeSitterNode:
-        new_node = type_name_to_class[ast.type]()
-        new_node.base_node = ast
-        new_node.children = []
-        for child in ast.named_children:
-            new_node.children.append(Desugarer.reify(child))
-        return new_node
-
     def parse(self, bytes) -> Tree:
         tree = self.parser.parse(bytes)
-        root_node: TreeSitterNode = self.reify(tree.root_node)
-
-        visitor = GraphVizVisitor()
-        print("----")
-        root_node.accept(visitor, GraphVizCtx())
-        print("----")
         return tree
 
     def ifdef_conds_query(self, tree: Tree) -> list[str]:

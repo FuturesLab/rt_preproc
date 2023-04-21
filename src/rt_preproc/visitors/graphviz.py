@@ -24,7 +24,10 @@ class GraphVizVisitor(IVisitor):
             return f"{node.base_node.id}-{node.base_node.start_point}"
 
         label = f'"{node.__class__.__name__}"' if label is None else label
-        self.buf += f'"{stringize_node(node)}" [label={label}];\n'
+        styler = ""
+        if node.base_node.type in type_name_to_color:
+            styler = f"style=filled color={type_name_to_color[node.base_node.type]}"
+        self.buf += f'"{stringize_node(node)}" [{styler} label={label}];\n'
         if ctx.parent is not None:
             self.buf += (
                 f'\t"{stringize_node(ctx.parent)}" -> "{stringize_node(node)}";\n'
@@ -135,3 +138,28 @@ class GraphVizVisitor(IVisitor):
     #   @visit.register@multimethod
     # def visit(self, node: abc.ABCMeta):
     #     print(f"ABC: {node}")
+
+
+type_name_to_color = {
+    "preproc_call": 4,
+    "preproc_def": 2,
+    "preproc_defined": 2,
+    "preproc_elif": 2,
+    "preproc_else": 2,
+    "preproc_function_def": 3,
+    "preproc_if": 2,
+    "preproc_ifdef": 2,
+    "preproc_include": 3,
+    "preproc_params": 1,
+    "return_statement": 1,
+    "identifier": 4,
+    "null": 1,
+    "number_literal": 5,
+    "preproc_arg": 2,
+    "preproc_directive": 2,
+    "primitive_type": 6,
+    "system_lib_string": 7,
+    "string_literal": 5,
+    "true": 8,
+    "type_identifier": 9,
+}
