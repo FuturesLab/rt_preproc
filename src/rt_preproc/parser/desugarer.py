@@ -1,9 +1,10 @@
-from tree_sitter import Parser, Tree
+from tree_sitter import Parser, Tree, Node
 from rt_preproc.parser import C_LANGUAGE
 from rt_preproc.parser.ast import TreeSitterNode, type_name_to_class
 from tree_sitter_types.parser import parse_node
 
 from rt_preproc.visitors.graphviz import GraphVizCtx, GraphVizVisitor
+
 
 class Desugarer:
     def __init__(self):
@@ -11,9 +12,18 @@ class Desugarer:
         parser.set_language(C_LANGUAGE)
         self.parser = parser
 
+    @staticmethod
+    def reify(ast: Node) -> TreeSitterNode:
+        new_node = type_name_to_class[ast.type]()
+        new_node.base_node = ast
+        new_node.children = []
+        for child in ast.named_children:
+            new_node.children.append(Desugarer.reify(child))
+        return new_node
+
     def parse(self, bytes) -> Tree:
         tree = self.parser.parse(bytes)
-        root_node : TreeSitterNode = parse_node(type_name_to_class , tree.root_node)()
+        root_node: TreeSitterNode = self.reify(tree.root_node)
 
         visitor = GraphVizVisitor()
         print("----")
