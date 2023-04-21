@@ -31,9 +31,4 @@ rt_preproc = "rt_preproc.console.application:main"
 test = { callable = "rt_preproc:run_tests" }
 
 [tool.poe.tasks]
-setup = """
-git submodule update --init --recursive
-poetry install
-pre-commit install
-"""
 gen_types = "python-tree-sitter-types vendor/tree-sitter-c/src/node-types.json src/rt_preproc/parser/ast.py"
