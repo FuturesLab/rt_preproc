@@ -1,14 +1,17 @@
 from typing import Union, Any, Optional, List
 
-from tree_sitter_types.parser import load_language, install_parser, parse_node
+from rt_preproc.parser.base import INode 
+from rt_preproc.visitors.base import IVisitor, IVisitorCtx
 
-
-class TreeSitterNode:
+class TreeSitterNode(INode):
     base_node: Any
 
     def text(self):
         return self.base_node.text
 
+    # this is a manual change to the generated code
+    def accept(self, visitor: IVisitor, ctx: IVisitorCtx):
+        return visitor.visit(self, ctx)
 
 class _abstractDeclarator(TreeSitterNode):
     field_names = []
