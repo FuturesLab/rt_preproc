@@ -1,7 +1,6 @@
 from tree_sitter import Parser, Tree, Node
 from rt_preproc.parser import C_LANGUAGE
 from rt_preproc.parser.ast import TreeSitterNode, type_name_to_class
-from tree_sitter_types.parser import parse_node
 
 from rt_preproc.visitors.graphviz import GraphVizCtx, GraphVizVisitor
 

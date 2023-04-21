@@ -5,6 +5,7 @@ from multimethod import multimethod
 from rt_preproc.visitors.base import IVisitor, IVisitorCtx
 from html import escape
 
+
 class GraphVizCtx(IVisitorCtx):
     def __init__(self, parent: Optional[ast.TreeSitterNode] = None) -> None:
         self.parent = parent
@@ -129,6 +130,7 @@ class GraphVizVisitor(IVisitor):
             + "</TD></TR></TABLE>>"
         )
         self.visit_children(node, ctx, label=label)
+
     #
     #   @visit.register@multimethod
     # def visit(self, node: abc.ABCMeta):
