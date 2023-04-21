@@ -7,7 +7,7 @@ from cleo.application import Application
 
 
 def main() -> int:
-    application = Application()
+    application = Application("Runtime Preproc", "dev")
     application.add(PatchCmd())
     application.add(GraphvizCmd())
     exit_code: int = application.run()
