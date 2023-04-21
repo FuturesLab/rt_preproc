@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-from runtime_preproc.console.run_command import RunCommand
+from rt_preproc.console.run_command import RunCommand
 
 from cleo.application import Application
 

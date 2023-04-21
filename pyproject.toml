@@ -1,10 +1,10 @@
 [tool.poetry]
-name = "runtime_preproc"
+name = "rt_preproc"
 version = "0.1.0"
 description = ""
 authors = ["Andrew Lee <candrewlee14@gmail.com>"]
 readme = "README.md"
-packages = [{include = "runtime_preproc", from = "src"}]
+packages = [{include = "rt_preproc", from = "src"}]
 
 [tool.poetry.dependencies]
 python = "^3.10"
@@ -19,5 +19,5 @@ requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
 
 [tool.poetry.scripts]
-runtime_preproc = "runtime_preproc.console.application:main"
-test = { callable = "runtime_preproc:run_tests" }
+rt_preproc = "rt_preproc.console.application:main"
+test = { callable = "rt_preproc:run_tests" }

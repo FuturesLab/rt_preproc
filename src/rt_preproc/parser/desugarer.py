@@ -1,5 +1,5 @@
 from tree_sitter import Parser, Tree
-from runtime_preproc.parser import C_LANGUAGE
+from rt_preproc.parser import C_LANGUAGE
 class Desugarer:
     def __init__(self):
         parser = Parser()
@@ -25,6 +25,8 @@ f"int rt_{cond}() {{"
 f" return getenv(\"{cond}\") != NULL;"
 f"}}"
       for cond in conds)
+        
+        
 
         # f"if ({new_name}) {{"
 

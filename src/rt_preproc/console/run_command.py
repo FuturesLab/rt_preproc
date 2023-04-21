@@ -1,6 +1,6 @@
 from cleo.commands.command import Command
 from cleo.helpers import argument
-from runtime_preproc.parser.desugarer import Desugarer
+from rt_preproc.parser.desugarer import Desugarer
 
 class RunCommand(Command):
     name = "patch"
