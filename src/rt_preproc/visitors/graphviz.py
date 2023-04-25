@@ -134,11 +134,6 @@ class GraphVizVisitor(IVisitor):
         )
         self.visit_children(node, ctx, label=label)
 
-    #
-    #   @visit.register@multimethod
-    # def visit(self, node: abc.ABCMeta):
-    #     print(f"ABC: {node}")
-
 
 type_name_to_color = {
     "preproc_call": 4,

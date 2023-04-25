@@ -15,5 +15,5 @@ You can run `poetry shell` to activate the virtualenv for development.
 To see the list of available commands, run `poetry run rt_preproc list`
 
 Examples:
-- `poetry run rt_preproc patch ./tests/c/foo.c`
-- `poetry run rt_preproc graphviz ./tests/c/foo.c`
+- `poetry run rt_preproc patch ./tests/c/foo/foo.c`
+- `poetry run rt_preproc graphviz ./tests/c/foo/foo.c`
