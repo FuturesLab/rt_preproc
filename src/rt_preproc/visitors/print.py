@@ -31,9 +31,12 @@ class PrintVisitor(IVisitor):
             
         if hasattr(node, "children") and node.children is not None:
             for child in node.children:
+                child.parent = node
                 child.accept(self, PrintCtx(parent=node))
             return
         return
+
+    """Visitor functions below"""
 
     @multimethod
     def visit(self, node: ast.TranslationUnit, ctx: PrintCtx) -> Any:
@@ -45,11 +48,13 @@ class PrintVisitor(IVisitor):
     def visit(self, node: ast.PreprocInclude, ctx: PrintCtx) -> Any:
         print("#include", end=' ')
         self.visit_children(node, ctx)
+    
     @visit.register
     def visit(self, node: ast.PreprocIfdef, ctx: PrintCtx) -> Any:
         print('#ifdef', end=' ')
         self.visit_children(node, ctx)
         print("#endif", end='\n')
+    
     @visit.register
     def visit(self, node: ast.SystemLibString, ctx: PrintCtx) -> Any:
         self.visit_children(node, ctx)
@@ -60,12 +65,15 @@ class PrintVisitor(IVisitor):
     @visit.register
     def visit(self, node: ast.FunctionDefinition, ctx: PrintCtx) -> Any:
         self.visit_children(node, ctx)
+    
     @visit.register
     def visit(self, node: ast.FunctionDeclarator, ctx: PrintCtx) -> Any:
         self.visit_children(node, ctx)
+    
     @visit.register
     def visit(self, node: ast.ParameterDeclaration, ctx: PrintCtx) -> Any:
         self.visit_children(node, ctx)
+    
     @visit.register
     def visit(self, node: ast.CompoundStatement, ctx: PrintCtx) -> Any:
         print("{", end='\n')
@@ -79,11 +87,13 @@ class PrintVisitor(IVisitor):
         print("(", end='')
         self.visit_children(node, ctx)
         print(")", end='')
+    
     @visit.register
     def visit(self, node: ast.ParameterList, ctx: PrintCtx) -> Any:
         print("(", end='')
         self.visit_children(node, ctx)
         print(")", end='')
+    
     @visit.register
     def visit(self, node: ast.PointerDeclarator, ctx: PrintCtx) -> Any:
         print("*", end='')
@@ -96,9 +106,11 @@ class PrintVisitor(IVisitor):
         print("(", end="")
         self.visit_children(node, ctx)
         print(")", end="\n")
+    
     @visit.register
     def visit(self, node: ast.BinaryExpression, ctx: PrintCtx) -> Any:
         self.visit_children(node, ctx)
+    
     @visit.register
     def visit(self, node: ast.CallExpression, ctx: PrintCtx) -> Any:
         self.visit_children(node, ctx)
@@ -109,10 +121,12 @@ class PrintVisitor(IVisitor):
     def visit(self, node: ast.ExpressionStatement, ctx: PrintCtx) -> Any:
         self.visit_children(node, ctx)
         print("", end=";\n")
+    
     @visit.register
     def visit(self, node: ast.IfStatement, ctx: PrintCtx) -> Any:
         print("if", end=' ')
         self.visit_children(node, ctx)
+    
     @visit.register
     def visit(self, node: ast.ReturnStatement, ctx: PrintCtx) -> Any:
         print("return", end=' ')
@@ -124,6 +138,7 @@ class PrintVisitor(IVisitor):
     @visit.register
     def visit(self, node: ast.StringLiteral, ctx: PrintCtx) -> Any:
         self.visit_children(node, ctx)    
+    
     @visit.register
     def visit(self, node: ast.NumberLiteral, ctx: PrintCtx) -> Any:
         self.visit_children(node, ctx)
@@ -142,14 +157,17 @@ class PrintVisitor(IVisitor):
         self.visit_children(node, ctx)  
         print("", end="\n")     
 
+    
     @visit.register
     def visit(self, node: ast.Null, ctx: PrintCtx) -> Any:
         self.visit_children(node, ctx)  
 
+    
     @visit.register
     def visit(self, node: ast.Declaration, ctx: PrintCtx) -> Any:
         self.visit_children(node, ctx)   
 
+    
     @visit.register
     def visit(self, node: ast.Identifier, ctx: PrintCtx) -> Any:
         self.visit_children(node, ctx)
