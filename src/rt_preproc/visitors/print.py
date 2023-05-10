@@ -91,7 +91,6 @@ class PrintVisitor(IVisitor):
 
     # Expressions.
 
-
     @visit.register
     def visit(self, node: ast.ParenthesizedExpression, ctx: PrintCtx) -> Any:
         print("(", end="")
