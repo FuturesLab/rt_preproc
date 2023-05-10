@@ -24,8 +24,8 @@ class Parser:
             (preproc_if   (
                 (identifier)    @macro
                 (_)             @contents
-            ))            
-        """ 
+            ))
+        """
 
         captures = C_LANGUAGE.query(query).captures(tree.root_node)
 

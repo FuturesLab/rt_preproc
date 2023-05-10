@@ -9,11 +9,11 @@ void func2(){
 }
 
 int main(){
+  if(FOO)
+    func();
+
   #ifdef FOO
     func();
-  #endif
-  #ifdef BAR
-    func2();
   #endif
   return 0;
 }
