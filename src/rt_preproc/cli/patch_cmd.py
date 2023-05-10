@@ -23,12 +23,17 @@ class PatchCmd(Command):
             ds     = Parser()
             tree   = ds.parse(bytes)
             nodes  = ds.query(tree)
-            
+
             root_node: TreeSitterNode = reify(tree.root_node)
-            
+
+            self.line("\n---- ORIGINAL C SOURCE ----")
+            printer = PrintVisitor()
+            root_node.accept(printer, PrintCtx()) 
+
             visitor = TransformVisitor()
             root_node.accept(visitor, TransformCtx())
 
+            self.line("\n---- PATCHED C SOURCE ----")
             printer = PrintVisitor()
             root_node.accept(printer, PrintCtx())
 
