@@ -116,6 +116,23 @@ class TransformVisitor(IVisitor):
         if isinstance(node.parent, ast.PreprocIfdef):
             self.move_to_if(node, ctx)
 
+    @visit.register
+    def visit(self, node: ast.IfStatement, ctx: TransformCtx) -> Any:
+        self.visit_children(node, ctx)
+        if isinstance(node.parent, ast.PreprocIfdef):
+            self.move_to_if(node, ctx)
+    
+    @visit.register
+    def visit(self, node: ast.ReturnStatement, ctx: TransformCtx) -> Any:
+        self.visit_children(node, ctx)
+        if isinstance(node.parent, ast.PreprocIfdef):
+            self.move_to_if(node, ctx)
+
+    @visit.register
+    def visit(self, node: ast.CompoundStatement, ctx: TransformCtx) -> Any:
+        if isinstance(node.parent, ast.PreprocIfdef):
+            self.move_to_if(node, ctx)
+
     """ Cases unaffected by variability """
     # Preprocessor syntax.
 
@@ -139,10 +156,6 @@ class TransformVisitor(IVisitor):
     
     @visit.register
     def visit(self, node: ast.ParameterDeclaration, ctx: TransformCtx) -> Any:
-        self.visit_children(node, ctx)
-    
-    @visit.register
-    def visit(self, node: ast.CompoundStatement, ctx: TransformCtx) -> Any:
         self.visit_children(node, ctx)
 
     # Arguments.
@@ -172,20 +185,6 @@ class TransformVisitor(IVisitor):
     @visit.register
     def visit(self, node: ast.CallExpression, ctx: TransformCtx) -> Any:    
         self.visit_children(node, ctx)
-
-    # Statements.
-    
-    @visit.register
-    def visit(self, node: ast.IfStatement, ctx: TransformCtx) -> Any:
-        self.visit_children(node, ctx)
-        if isinstance(node.parent, ast.PreprocIfdef):
-            self.move_to_if(node, ctx)
-    
-    @visit.register
-    def visit(self, node: ast.ReturnStatement, ctx: TransformCtx) -> Any:
-        self.visit_children(node, ctx)
-        if isinstance(node.parent, ast.PreprocIfdef):
-            self.move_to_if(node, ctx)
 
     # Literals.
 
