@@ -100,15 +100,12 @@ class TransformVisitor(IVisitor):
         self.visit_children(node, ctx)
 
     """ Variability cases to handle. """
-    # Preproc-wrapped function definitions.
 
     @visit.register
     def visit(self, node: ast.FunctionDefinition, ctx: TransformCtx) -> Any:
         if isinstance(node.parent, ast.PreprocIfdef):
             self.move_node(node, self.get_root_node(node), 0, ctx)            
         self.visit_children(node, ctx)
-
-    # Preproc-wrapped expressions (e.g., calls, other logic, etc.).
 
     @visit.register
     def visit(self, node: ast.ExpressionStatement, ctx: TransformCtx) -> Any:
@@ -134,7 +131,6 @@ class TransformVisitor(IVisitor):
         if isinstance(node.parent, ast.PreprocIfdef):
             self.move_to_if(node, ctx)
 
-    """ Cases unaffected by variability """
     # Preprocessor syntax.
 
     @visit.register
