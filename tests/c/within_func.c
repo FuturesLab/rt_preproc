@@ -9,9 +9,6 @@ void func2(){
 }
 
 int main(){
-  if(FOO)
-    func();
-
   #ifdef FOO
     func();
   #endif
