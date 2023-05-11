@@ -178,10 +178,14 @@ class TransformVisitor(IVisitor):
     @visit.register
     def visit(self, node: ast.IfStatement, ctx: TransformCtx) -> Any:
         self.visit_children(node, ctx)
+        if isinstance(node.parent, ast.PreprocIfdef):
+            self.move_to_if(node, ctx)
     
     @visit.register
     def visit(self, node: ast.ReturnStatement, ctx: TransformCtx) -> Any:
         self.visit_children(node, ctx)
+        if isinstance(node.parent, ast.PreprocIfdef):
+            self.move_to_if(node, ctx)
 
     # Literals.
 

@@ -108,7 +108,7 @@ class PrintVisitor(IVisitor):
     def visit(self, node: ast.ParenthesizedExpression, ctx: PrintCtx) -> Any:
         print("(", end="")
         self.visit_children(node, ctx)
-        print(")", end="") # maybe no \n?
+        print(")", end=" ") # maybe no \n?
     
     @visit.register
     def visit(self, node: ast.BinaryExpression, ctx: PrintCtx) -> Any:

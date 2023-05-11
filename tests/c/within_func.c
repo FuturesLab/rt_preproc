@@ -1,16 +1,19 @@
 #include <stdio.h>
 
-void func(){
+void foo(){
   printf("foo");
 }
 
-void func2(){
+void bar(){
   printf("bar");
 }
 
 int main(){
   #ifdef FOO
-    func();
+    foo();
+  #endif
+  #ifdef BAR
+    bar();
   #endif
   return 0;
 }
