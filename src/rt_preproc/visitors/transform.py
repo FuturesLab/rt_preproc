@@ -101,11 +101,7 @@ class TransformVisitor(IVisitor):
 
     """ Variability cases to handle. """
 
-    @visit.register
-    def visit(self, node: ast.FunctionDefinition, ctx: TransformCtx) -> Any:
-        if isinstance(node.parent, ast.PreprocIfdef):
-            self.move_node(node, self.get_root_node(node), 0, ctx)            
-        self.visit_children(node, ctx)
+    # General expressions...
 
     @visit.register
     def visit(self, node: ast.ExpressionStatement, ctx: TransformCtx) -> Any:
@@ -131,28 +127,42 @@ class TransformVisitor(IVisitor):
         if isinstance(node.parent, ast.PreprocIfdef):
             self.move_to_if(node, ctx)
 
+    # Function definitions / declarations...
+
+    @visit.register
+    def visit(self, node: ast.FunctionDefinition, ctx: TransformCtx) -> Any:
+        if isinstance(node.parent, ast.PreprocIfdef):
+            self.move_node(node, self.get_root_node(node), 0, ctx)            
+        self.visit_children(node, ctx)
+
+    @visit.register
+    def visit(self, node: ast.FunctionDeclarator, ctx: TransformCtx) -> Any:
+        if isinstance(node.parent.parent, ast.PreprocIfdef):
+            self.move_node(node.parent, self.get_root_node(node), 0, ctx)   
+        self.visit_children(node, ctx)
+
+    # Variable definitions / declarations...
+
+    @visit.register
+    def visit(self, node: ast.ParameterDeclaration, ctx: TransformCtx) -> Any:
+        self.visit_children(node, ctx)
+
+    """ Base or variability-unaware objects. """
+
     # Preprocessor syntax.
+
+    @visit.register
+    def visit(self, node: ast.PreprocIfdef, ctx: TransformCtx) -> Any:
+        if isinstance(node.parent, ast.PreprocIfdef):
+            self.move_to_if(node, ctx)
+        self.visit_children(node, ctx)
 
     @visit.register
     def visit(self, node: ast.PreprocInclude, ctx: TransformCtx) -> Any:
         self.visit_children(node, ctx)
     
     @visit.register
-    def visit(self, node: ast.PreprocIfdef, ctx: TransformCtx) -> Any:
-        self.visit_children(node, ctx)
-    
-    @visit.register
     def visit(self, node: ast.SystemLibString, ctx: TransformCtx) -> Any:
-        self.visit_children(node, ctx)
-
-    # Function definitions and bodies.
-
-    @visit.register
-    def visit(self, node: ast.FunctionDeclarator, ctx: TransformCtx) -> Any:
-        self.visit_children(node, ctx)
-    
-    @visit.register
-    def visit(self, node: ast.ParameterDeclaration, ctx: TransformCtx) -> Any:
         self.visit_children(node, ctx)
 
     # Arguments.
@@ -202,16 +212,16 @@ class TransformVisitor(IVisitor):
     # Misc.
 
     @visit.register
+    def visit(self, node: ast.Declaration, ctx: TransformCtx) -> Any:         
+        self.visit_children(node, ctx)  
+
+    @visit.register
     def visit(self, node: ast.Comment, ctx: TransformCtx) -> Any:
         self.visit_children(node, ctx)  
     
     @visit.register
     def visit(self, node: ast.Null, ctx: TransformCtx) -> Any:
         self.visit_children(node, ctx)  
-    
-    @visit.register
-    def visit(self, node: ast.Declaration, ctx: TransformCtx) -> Any:
-        self.visit_children(node, ctx)   
     
     @visit.register
     def visit(self, node: ast.Identifier, ctx: TransformCtx) -> Any:
