@@ -25,35 +25,72 @@ class TransformVisitor(IVisitor):
         if hasattr(node, "children") and node.children is not None:
             for child in node.children:
                 child.parent = node
-                child.accept(self, TransformCtx(parent=node))
+                if hasattr(child, "base_node"): child.text = child.base_node.text
+                child.accept(self, TransformCtx(parent=node))    
             return
         return
 
+    """ Hacky way to recurse AST to get root node. """
 
     def get_root_node(self, node: ast.TreeSitterNode):
         if isinstance(node.parent, ast.TranslationUnit):
             return node.parent
         return self.get_root_node(node.parent)
 
+    """ Retrieve the macro string for a preproc node. """
+
+    def get_pp_macro(self, pp_node: ast.TreeSitterNode):
+        if isinstance(pp_node, ast.PreprocIfdef):
+            return pp_node.children[0].text
+
+    """ Unlinks a child node from its parent node. """
 
     def remove_child(self, child: ast.TreeSitterNode, 
                            parent: ast.TreeSitterNode, 
                            ctx: TransformCtx):
-        child.parent = None
         parent.children.remove(child)
-
-        if isinstance(parent, ast.PreprocIfdef) and len(parent.children) < 2:
+        child.parent = None
+        if isinstance(parent, ast.PreprocIfdef) \
+        and isinstance(parent.children[-1], ast.Identifier):
             self.remove_child(parent, parent.parent, ctx)
-
         return
 
+    """ Move a node to a desired destination. """
 
     def move_node(self, node: ast.TreeSitterNode, 
-                        dest: ast.TreeSitterNode, 
+                        dest: ast.TreeSitterNode,
+                        pos: int, 
                         ctx: TransformCtx):
-        self.remove_child(node, node.parent, ctx)
-        dest.children.insert(0, node)
+        if node.parent and node in node.parent.children:
+            self.remove_child(node, node.parent, ctx)
+        dest.children.insert(pos, node)
         node.parent = dest
+        return
+
+    """ Insert IF statement before parent preproc block. """
+
+    def move_to_if(self, node: ast.TreeSitterNode,
+                         ctx: TransformCtx):
+
+        old_idx = node.parent.parent.children.index(node.parent)
+        old_loc = node.parent.parent
+
+        macro = self.get_pp_macro(node.parent)
+        self.remove_child(node, node.parent, ctx) 
+
+        new_if = ast.IfStatement() # "if ..."
+        new_if.children = []
+        new_if.parent = None
+
+        new_pe = ast.ParenthesizedExpression() # "if (FOO)..."
+        new_pe.text = ("\"%s\"".encode('utf-8')) % macro
+        new_pe.children = []
+        new_pe.parent = None
+
+        self.move_node(new_pe, new_if, 0, ctx)
+        self.move_node(node, new_if, 1, ctx)
+        self.move_node(new_if, old_loc, old_idx, ctx)
+ 
         return
 
     """Visitor functions below"""
@@ -62,6 +99,24 @@ class TransformVisitor(IVisitor):
     def visit(self, node: ast.TranslationUnit, ctx: TransformCtx) -> Any:
         self.visit_children(node, ctx)
 
+    """ Variability cases to handle. """
+    # Preproc-wrapped function definitions.
+
+    @visit.register
+    def visit(self, node: ast.FunctionDefinition, ctx: TransformCtx) -> Any:
+        if isinstance(node.parent, ast.PreprocIfdef):
+            self.move_node(node, self.get_root_node(node), 0, ctx)            
+        self.visit_children(node, ctx)
+
+    # Preproc-wrapped expressions (e.g., calls, other logic, etc.).
+
+    @visit.register
+    def visit(self, node: ast.ExpressionStatement, ctx: TransformCtx) -> Any:
+        self.visit_children(node, ctx)
+        if isinstance(node.parent, ast.PreprocIfdef):
+            self.move_to_if(node, ctx)
+
+    """ Cases unaffected by variability """
     # Preprocessor syntax.
 
     @visit.register
@@ -77,12 +132,6 @@ class TransformVisitor(IVisitor):
         self.visit_children(node, ctx)
 
     # Function definitions and bodies.
-
-    @visit.register
-    def visit(self, node: ast.FunctionDefinition, ctx: TransformCtx) -> Any:
-        if isinstance(node.parent, ast.PreprocIfdef):
-            self.move_node(node, self.get_root_node(node), ctx)            
-        self.visit_children(node, ctx)
 
     @visit.register
     def visit(self, node: ast.FunctionDeclarator, ctx: TransformCtx) -> Any:
@@ -121,14 +170,10 @@ class TransformVisitor(IVisitor):
         self.visit_children(node, ctx)
     
     @visit.register
-    def visit(self, node: ast.CallExpression, ctx: TransformCtx) -> Any:
+    def visit(self, node: ast.CallExpression, ctx: TransformCtx) -> Any:    
         self.visit_children(node, ctx)
 
     # Statements.
-
-    @visit.register
-    def visit(self, node: ast.ExpressionStatement, ctx: TransformCtx) -> Any:
-        self.visit_children(node, ctx)
     
     @visit.register
     def visit(self, node: ast.IfStatement, ctx: TransformCtx) -> Any:

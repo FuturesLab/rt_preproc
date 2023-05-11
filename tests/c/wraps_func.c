@@ -7,6 +7,9 @@
 #endif 
  
 int main(){
+  if ("FOO"){
+    func();
+  }
   #ifdef FOO
     func();
   #endif

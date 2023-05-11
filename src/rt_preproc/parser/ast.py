@@ -7,8 +7,8 @@ from rt_preproc.visitors.base import IVisitor, IVisitorCtx
 class TreeSitterNode(INode):
     base_node: Any
 
-    def text(self):
-        return self.base_node.text
+    #def text(self):
+    #    return self.base_node.text
 
     # this is a manual change to the generated code
     def accept(self, visitor: IVisitor, ctx: IVisitorCtx):

@@ -7,13 +7,7 @@ def reify(ast: Node) -> TreeSitterNode:
     new_node.base_node = ast
     new_node.children = []
     new_node.parent = None
-
-    #if ast.parent is not None:
-        #new_node.parent = type_name_to_class[ast.parent.type]()
-        #new_node.parent = TreeSitterNode(ast.parent)
-
-    #if ast.next_sibling is not None:
-    #    new_node.sibling = reify(ast.next_sibling)
+    new_node.text = ""
 
     for child in ast.named_children:
         new_node.children.append(reify(child))

@@ -8,9 +8,9 @@ from rt_preproc.visitors.base import IVisitor
 class INode(ABC):
     """Node interface"""
 
-    @abstractmethod
-    def text(self) -> str:
-        pass
+    #@abstractmethod
+    #def text(self) -> str:
+    #    pass
 
     @abstractmethod
     def accept(self, visitor: IVisitor):

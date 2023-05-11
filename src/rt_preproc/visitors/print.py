@@ -22,8 +22,10 @@ class PrintVisitor(IVisitor):
         self, node: ast.TreeSitterNode, ctx: PrintCtx, label: str = None
     ) -> list[Any]:
 
+        #print(node, node.parent)
+
         if len(node.children) == 0:
-            raw_text = node.base_node.text.decode('utf-8')
+            raw_text = node.text.decode('utf-8')
 
             # Avoid "(())" edge case...
 
@@ -32,6 +34,7 @@ class PrintVisitor(IVisitor):
         if hasattr(node, "children") and node.children is not None:
             for child in node.children:
                 child.parent = node
+                if hasattr(child, "base_node"): child.text = child.base_node.text
                 child.accept(self, PrintCtx(parent=node))
             return
         return
@@ -77,7 +80,7 @@ class PrintVisitor(IVisitor):
     @visit.register
     def visit(self, node: ast.CompoundStatement, ctx: PrintCtx) -> Any:
         print("{", end='\n')
-        self.visit_children(node, ctx)
+        if node.children: self.visit_children(node, ctx)
         print("}", end='\n')
 
     # Arguments.
@@ -105,7 +108,7 @@ class PrintVisitor(IVisitor):
     def visit(self, node: ast.ParenthesizedExpression, ctx: PrintCtx) -> Any:
         print("(", end="")
         self.visit_children(node, ctx)
-        print(")", end="\n")
+        print(")", end="") # maybe no \n?
     
     @visit.register
     def visit(self, node: ast.BinaryExpression, ctx: PrintCtx) -> Any:
@@ -157,17 +160,15 @@ class PrintVisitor(IVisitor):
         self.visit_children(node, ctx)  
         print("", end="\n")     
 
-    
     @visit.register
     def visit(self, node: ast.Null, ctx: PrintCtx) -> Any:
         self.visit_children(node, ctx)  
 
-    
     @visit.register
     def visit(self, node: ast.Declaration, ctx: PrintCtx) -> Any:
-        self.visit_children(node, ctx)   
+        self.visit_children(node, ctx)  
+        print(";", end='\n') 
 
-    
     @visit.register
     def visit(self, node: ast.Identifier, ctx: PrintCtx) -> Any:
         self.visit_children(node, ctx)
