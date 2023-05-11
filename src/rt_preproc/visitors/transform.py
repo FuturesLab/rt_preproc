@@ -130,6 +130,7 @@ class TransformVisitor(IVisitor):
 
     @visit.register
     def visit(self, node: ast.CompoundStatement, ctx: TransformCtx) -> Any:
+        self.visit_children(node, ctx)
         if isinstance(node.parent, ast.PreprocIfdef):
             self.move_to_if(node, ctx)
 
