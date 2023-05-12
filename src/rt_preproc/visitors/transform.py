@@ -4,6 +4,7 @@ from typing import Optional
 from multimethod import multimethod
 from rt_preproc.visitors.base import IVisitor, IVisitorCtx
 from html import escape
+import copy
 
 
 class TransformCtx(IVisitorCtx):
@@ -61,37 +62,83 @@ class TransformVisitor(IVisitor):
                         dest: ast.TreeSitterNode,
                         pos: int, 
                         ctx: TransformCtx):
+
         if node.parent and node in node.parent.children:
             self.remove_child(node, node.parent, ctx)
         dest.children.insert(pos, node)
         node.parent = dest
         return
 
-    """ Insert IF statement before parent preproc block. """
+    """ Move to IF statement before parent preproc block. """
 
     def move_to_if(self, node: ast.TreeSitterNode,
                          ctx: TransformCtx):
 
+        # Get preproc block's macro and location w.r.t. parent func.
+
+        print(node, node.parent, node.parent.parent)
+
         old_idx = node.parent.parent.children.index(node.parent)
         old_loc = node.parent.parent
-
         macro = self.get_pp_macro(node.parent)
+
+        # Decouple node from parent preproc block, and make a new IF. 
+        
         self.remove_child(node, node.parent, ctx) 
 
         new_if = ast.IfStatement() # "if ..."
         new_if.children = []
         new_if.parent = None
 
-        new_pe = ast.ParenthesizedExpression() # "if (FOO)..."
-        new_pe.text = ("\"%s\"".encode('utf-8')) % macro
-        new_pe.children = []
-        new_pe.parent = None
+        # Create new exp based on preproc macro and move accordingly.
 
-        self.move_node(new_pe, new_if, 0, ctx)
+        new_exp = ast.ParenthesizedExpression() # "if (FOO)..."
+        new_exp.text = ("\"%s\"".encode('utf-8')) % macro
+        new_exp.children = []
+        new_exp.parent = None
+
+        self.move_node(new_exp, new_if, 0, ctx)
         self.move_node(node, new_if, 1, ctx)
         self.move_node(new_if, old_loc, old_idx, ctx)
  
         return
+
+    """ Move a newly-declared variable accordingly. """
+
+    def move_var_decl(self, decl: ast.TreeSitterNode,
+                            ctx: TransformCtx):
+
+        # If initialized, we must split up the var's decl and init.
+
+        if isinstance(decl.children[1], ast.InitDeclarator):
+            var_init      = decl.children[1]
+            
+            # Rewrite current var init to preproc-guarded expr stmt.
+
+            var_init_copy = copy.copy(decl.children[1])
+
+            print(var_init_copy.children)
+
+            #self.move_to_if(var_init_copy, ctx)
+
+            # Rewrite current var decl+init to just a decl.
+
+            self.move_node(var_init_copy, decl.parent, 0, ctx)
+
+            var_type = decl.children[0]
+            var_name = decl.children[1].children[0] 
+            
+            self.remove_child(var_init, decl, ctx)
+            self.move_node(var_name, decl, 1, ctx)
+            
+            
+        # If just a declaration (with no init value), just move it.
+
+        else:        
+            self.move_node(decl, decl.parent.parent, 0, ctx)
+
+        return
+
 
     """Visitor functions below"""
 
@@ -144,7 +191,9 @@ class TransformVisitor(IVisitor):
     # Variable definitions / declarations...
 
     @visit.register
-    def visit(self, node: ast.ParameterDeclaration, ctx: TransformCtx) -> Any:
+    def visit(self, node: ast.Declaration, ctx: TransformCtx) -> Any:        
+        if isinstance(node.parent, ast.PreprocIfdef):
+            self.move_var_decl(node, ctx)
         self.visit_children(node, ctx)
 
     """ Base or variability-unaware objects. """
@@ -174,6 +223,10 @@ class TransformVisitor(IVisitor):
     @visit.register
     def visit(self, node: ast.ParameterList, ctx: TransformCtx) -> Any:
         self.visit_children(node, ctx)
+
+    @visit.register
+    def visit(self, node: ast.ParameterDeclaration, ctx: TransformCtx) -> Any:
+        self.visit_children(node, ctx)
     
     @visit.register
     def visit(self, node: ast.PointerDeclarator, ctx: TransformCtx) -> Any:
@@ -197,7 +250,7 @@ class TransformVisitor(IVisitor):
     def visit(self, node: ast.InitDeclarator, ctx: TransformCtx) -> Any:
         self.visit_children(node, ctx)
 
-    # Literals.
+    # Types and literals.
 
     @visit.register
     def visit(self, node: ast.StringLiteral, ctx: TransformCtx) -> Any:
@@ -211,17 +264,11 @@ class TransformVisitor(IVisitor):
     def visit(self, node: ast._expression, ctx: TransformCtx) -> Any:
         self.visit_children(node, ctx)    
 
-    # Types.
-
     @visit.register
     def visit(self, node: ast.PrimitiveType, ctx: TransformCtx) -> Any:
         self.visit_children(node, ctx)
 
     # Misc.
-
-    @visit.register
-    def visit(self, node: ast.Declaration, ctx: TransformCtx) -> Any:         
-        self.visit_children(node, ctx)  
 
     @visit.register
     def visit(self, node: ast.Comment, ctx: TransformCtx) -> Any:

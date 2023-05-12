@@ -96,10 +96,13 @@ class PrintVisitor(IVisitor):
         print("(", end='')
         self.visit_children(node, ctx)
         print(")", end='')
+
+    @visit.register
+    def visit(self, node: ast.ParameterDeclaration, ctx: PrintCtx) -> Any:
+        self.visit_children(node, ctx)
     
     @visit.register
     def visit(self, node: ast.PointerDeclarator, ctx: PrintCtx) -> Any:
-        print("*", end='')
         self.visit_children(node, ctx)
 
     # Expressions.

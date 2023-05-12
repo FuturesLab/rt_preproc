@@ -9,9 +9,6 @@ def reify(ast: Node) -> TreeSitterNode:
     new_node.parent = None
     new_node.text = ""
 
-    #for child in ast.named_children:
-    #    new_node.children.append(reify(child))
-
     if isinstance(new_node, BinaryExpression) \
     or isinstance(new_node, InitDeclarator): 
         children = ast.children
