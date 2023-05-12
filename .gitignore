@@ -8,10 +8,10 @@ test
 test.c
 
 # C extensions
-*.so
+**/.so
 
 # Mac shit
-*.DS_Store
+**/.DS_Store
 
 # VSCode
 .vscode/
