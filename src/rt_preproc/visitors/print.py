@@ -108,7 +108,7 @@ class PrintVisitor(IVisitor):
     def visit(self, node: ast.ParenthesizedExpression, ctx: PrintCtx) -> Any:
         print("(", end="")
         self.visit_children(node, ctx)
-        print(")", end=" ") # maybe no \n?
+        print(")", end="")
     
     @visit.register
     def visit(self, node: ast.BinaryExpression, ctx: PrintCtx) -> Any:
@@ -136,6 +136,11 @@ class PrintVisitor(IVisitor):
         self.visit_children(node, ctx)
         print("", end=';\n')
 
+    @visit.register
+    def visit(self, node: ast.InitDeclarator, ctx: PrintCtx) -> Any:
+        self.visit_children(node, ctx)
+
+
     # Literals.
 
     @visit.register
@@ -145,6 +150,10 @@ class PrintVisitor(IVisitor):
     @visit.register
     def visit(self, node: ast.NumberLiteral, ctx: PrintCtx) -> Any:
         self.visit_children(node, ctx)
+
+    @visit.register
+    def visit(self, node: ast._expression, ctx: PrintCtx) -> Any:
+        self.visit_children(node, ctx)    
 
     # Types.
 

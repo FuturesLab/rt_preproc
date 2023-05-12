@@ -193,6 +193,10 @@ class TransformVisitor(IVisitor):
     def visit(self, node: ast.CallExpression, ctx: TransformCtx) -> Any:    
         self.visit_children(node, ctx)
 
+    @visit.register
+    def visit(self, node: ast.InitDeclarator, ctx: TransformCtx) -> Any:
+        self.visit_children(node, ctx)
+
     # Literals.
 
     @visit.register
@@ -202,6 +206,10 @@ class TransformVisitor(IVisitor):
     @visit.register
     def visit(self, node: ast.NumberLiteral, ctx: TransformCtx) -> Any:
         self.visit_children(node, ctx)
+
+    @visit.register
+    def visit(self, node: ast._expression, ctx: TransformCtx) -> Any:
+        self.visit_children(node, ctx)    
 
     # Types.
 

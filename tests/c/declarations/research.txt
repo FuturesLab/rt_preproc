@@ -1,0 +1,9 @@
+I direct the FuTURES-3 Lab at the University of Utah, where I lead research and train students in the areas of software and systems security.
+Some high-level topics my group works on include software testing [1,2], binary analysis [3,4], vulnerability triage, and bug repair. 
+Ongoing student projects include: automated testing of (1) software transpilers, and (2) binary decompilers and disassemblers; (3) designing variability-aware fuzzing techniques for testing large software product lines; (4) building new platforms for reverse engineering education; and (5) code-agnostic automated harnessing for fuzzing open- and closed-source APIs.
+I am especially interested in making efficient and effective quality assurance possible for today's opaque and otherwise difficult-to-vet software and systems, with the end goal of making computing safer and more reliable for all.
+
+[1]: https://users.cs.utah.edu/~snagy/papers/22ACSAC.pdf
+[2]: https://users.cs.utah.edu/~snagy/papers/19SP.pdf
+[3]: https://users.cs.utah.edu/~snagy/papers/21SEC.pdf
+[4]: https://users.cs.utah.edu/~snagy/papers/21CCS.pdf

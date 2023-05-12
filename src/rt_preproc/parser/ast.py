@@ -921,6 +921,9 @@ class TypeIdentifier(TreeSitterNode):
 
 
 type_name_to_class = {
+    "+": _expression,
+    "-": _expression,
+    "=": _expression,
     "_abstract_declarator": _abstractDeclarator,
     "_declarator": _declarator,
     "_expression": _expression,
