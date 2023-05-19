@@ -88,6 +88,9 @@ class ArrayDeclarator(TreeSitterNode):
 
 
 class AssignmentExpression(TreeSitterNode):
+    def __init__(self):
+        self.children = []
+
     field_names = ["left", "operator", "right"]
     left: Union[
         "CallExpression",
@@ -102,6 +105,7 @@ class AssignmentExpression(TreeSitterNode):
     ]
     right: "_expression"
     children: None
+    children = [] # Steve: needs `children` for new IF statements.
 
 
 class Attribute(TreeSitterNode):
@@ -232,6 +236,9 @@ class CompoundLiteralExpression(TreeSitterNode):
 
 
 class CompoundStatement(TreeSitterNode):
+    def __init__(self):
+        self.children = []
+
     field_names = []
     children: Optional[
         List[
@@ -250,7 +257,7 @@ class CompoundStatement(TreeSitterNode):
                 "TypeDefinition",
             ]
         ]
-    ]
+    ] = [] # Steve: needs `children` for new IF statements.
 
 
 class ConcatenatedString(TreeSitterNode):
@@ -272,6 +279,9 @@ class ContinueStatement(TreeSitterNode):
 
 
 class Declaration(TreeSitterNode):
+    def __init__(self):
+        self.children = []
+
     field_names = ["declarator", "type"]
     declarator: List[Union["_declarator", "InitDeclarator"]]
     type: "_typeSpecifier"
@@ -285,7 +295,7 @@ class Declaration(TreeSitterNode):
                 "TypeQualifier",
             ]
         ]
-    ]
+    ] = []  # Steve: needs `children` for new Decl statements.
 
 
 class DeclarationList(TreeSitterNode):
@@ -337,8 +347,11 @@ class EnumeratorList(TreeSitterNode):
 
 
 class ExpressionStatement(TreeSitterNode):
+    def __init__(self):
+        self.children = []
+
     field_names = []
-    children: Optional[Union["_expression", "CommaExpression"]]
+    children: Optional[Union["_expression", "CommaExpression"]] = []  # Steve: needs `children` for new IF statements.
 
 
 class FieldDeclaration(TreeSitterNode):
@@ -430,11 +443,15 @@ class GotoStatement(TreeSitterNode):
 
 
 class IfStatement(TreeSitterNode):
+    def __init__(self):
+        self.children = []
+
     field_names = ["alternative", "condition", "consequence"]
     alternative: Optional["_statement"]
     condition: "ParenthesizedExpression"
     consequence: "_statement"
-    children: None
+    #children: None
+    children = []
 
 
 class InitDeclarator(TreeSitterNode):
@@ -534,8 +551,12 @@ class ParenthesizedDeclarator(TreeSitterNode):
 
 
 class ParenthesizedExpression(TreeSitterNode):
+    def __init__(self):
+        self.children = []
+
     field_names = []
-    children: Union["_expression", "CommaExpression", "PreprocDefined"]
+    children: Union["_expression", "CommaExpression", "PreprocDefined"] \
+        = [] # Steve: needs `children` for new IF statements.
 
 
 class PointerDeclarator(TreeSitterNode):

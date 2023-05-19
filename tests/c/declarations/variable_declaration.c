@@ -6,6 +6,8 @@ int foo(int x){
 
 int main() {
   #ifdef FOO
-    int x = 2;
+    int y = 2;
+    int j = 10;
+    x = 2;
   #endif
 }

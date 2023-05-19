@@ -129,6 +129,10 @@ class PrintVisitor(IVisitor):
         print("", end=";\n")
     
     @visit.register
+    def visit(self, node: ast.AssignmentExpression, ctx: PrintCtx) -> Any:
+        self.visit_children(node, ctx)
+
+    @visit.register
     def visit(self, node: ast.IfStatement, ctx: PrintCtx) -> Any:
         print("if", end=' ')
         self.visit_children(node, ctx)
@@ -156,7 +160,7 @@ class PrintVisitor(IVisitor):
 
     @visit.register
     def visit(self, node: ast._expression, ctx: PrintCtx) -> Any:
-        self.visit_children(node, ctx)    
+        self.visit_children(node, ctx)
 
     # Types.
 
