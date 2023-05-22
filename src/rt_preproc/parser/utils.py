@@ -107,6 +107,7 @@ def move_var_decl(decl: TreeSitterNode):
     assert(isinstance(decl, Declaration))
 
     # Initialized declarations.
+    
     if hasattr(decl, "children") \
     and len(decl.children) > 1 \
     and isinstance(decl.children[1], InitDeclarator): 
@@ -130,13 +131,15 @@ def move_var_decl(decl: TreeSitterNode):
             for child in assn_expr.children]).encode('utf-8')
 
         move_node(assn_expr, expr_stmt, 0)
-        move_node(expr_stmt, decl.parent, -1)
+        decl_loc = decl.parent.children.index(decl)
+        move_node(expr_stmt, decl.parent, decl_loc)
         remove_child(decl, decl.parent)
 
         return
         
     # Uninitialized declaration.
+    
     else: 
-        #move_node(decl, decl.parent.parent, 0)
-        return 
+        move_node(decl, decl.parent.parent, 0)
+    
     return

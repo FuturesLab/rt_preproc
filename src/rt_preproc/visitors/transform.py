@@ -37,66 +37,70 @@ class TransformVisitor(IVisitor):
     def visit(self, node: ast.TranslationUnit, ctx: TransformCtx) -> Any:
         self.visit_children(node, ctx)
 
+    # Preprocessor syntax.
+
+    @visit.register
+    def visit(self, node: ast.PreprocIfdef, ctx: TransformCtx) -> Any:
+    
+        # First pass: identify any declarations and handle them first.
+
+        for child in node.children:
+            if isinstance(child, ast.Declaration):
+                move_var_decl(child)
+            if isinstance(child, ast.FunctionDefinition):
+                move_node(child, get_root_node(child), 0)   
+            if isinstance(child, ast.FunctionDeclarator):
+                move_node(child, get_root_node(child), 0)
+
+        # Second pass: handle all remaining children.
+        
+        for child in node.children:
+            if isinstance(child, ast.IfStatement) \
+            or isinstance(child, ast.ReturnStatement) \
+            or isinstance(child, ast.CompoundStatement) \
+            or isinstance(child, ast.AssignmentExpression) \
+            or isinstance(child, ast.ExpressionStatement) \
+            or isinstance(child, ast.PreprocIfdef):
+                move_to_if(child)
+
+        self.visit_children(node, ctx)
+
     # General expressions...
 
     @visit.register
     def visit(self, node: ast.ExpressionStatement, ctx: TransformCtx) -> Any:
         self.visit_children(node, ctx)
-        if isinstance(node.parent, ast.PreprocIfdef):
-            move_to_if(node)
 
     @visit.register
     def visit(self, node: ast.IfStatement, ctx: TransformCtx) -> Any:
         self.visit_children(node, ctx)
-        if isinstance(node.parent, ast.PreprocIfdef):
-            move_to_if(node)
     
     @visit.register
     def visit(self, node: ast.ReturnStatement, ctx: TransformCtx) -> Any:
         self.visit_children(node, ctx)
-        if isinstance(node.parent, ast.PreprocIfdef):
-            move_to_if(node)
 
     @visit.register
     def visit(self, node: ast.CompoundStatement, ctx: TransformCtx) -> Any:
         self.visit_children(node, ctx)
-        if isinstance(node.parent, ast.PreprocIfdef):
-            move_to_if(node)
 
     @visit.register
     def visit(self, node: ast.AssignmentExpression, ctx: TransformCtx) -> Any:
         self.visit_children(node, ctx)
-        if isinstance(node.parent, ast.PreprocIfdef):
-            move_to_if(node)
 
     # Function definitions / declarations...
 
     @visit.register
-    def visit(self, node: ast.FunctionDefinition, ctx: TransformCtx) -> Any:
-        if isinstance(node.parent, ast.PreprocIfdef):
-            move_node(node, get_root_node(node), 0)            
+    def visit(self, node: ast.FunctionDefinition, ctx: TransformCtx) -> Any:       
         self.visit_children(node, ctx)
 
     @visit.register
-    def visit(self, node: ast.FunctionDeclarator, ctx: TransformCtx) -> Any:
-        if isinstance(node.parent.parent, ast.PreprocIfdef):
-            move_node(node.parent, get_root_node(node), 0)   
+    def visit(self, node: ast.FunctionDeclarator, ctx: TransformCtx) -> Any: 
         self.visit_children(node, ctx)
 
     # Variable definitions / declarations...
 
     @visit.register
     def visit(self, node: ast.Declaration, ctx: TransformCtx) -> Any:        
-        if isinstance(node.parent, ast.PreprocIfdef):
-            move_var_decl(node)
-        self.visit_children(node, ctx)
-
-    # Preprocessor syntax.
-
-    @visit.register
-    def visit(self, node: ast.PreprocIfdef, ctx: TransformCtx) -> Any:
-        if isinstance(node.parent, ast.PreprocIfdef):
-            move_to_if(node)
         self.visit_children(node, ctx)
 
     @visit.register

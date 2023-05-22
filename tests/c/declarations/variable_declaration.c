@@ -1,13 +1,10 @@
 #include <stdio.h>
 
-int foo(int x){
-  return x+1;
-}
-
 int main() {
+  int x;
   #ifdef FOO
     int y = 2;
-    int j = 10;
-    x = 2;
+    x = y;
   #endif
+  return x;
 }
