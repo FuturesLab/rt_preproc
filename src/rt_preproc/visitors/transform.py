@@ -37,14 +37,12 @@ class TransformVisitor(IVisitor):
     def visit(self, node: ast.TranslationUnit, ctx: TransformCtx) -> Any:
         self.visit_children(node, ctx)
 
-    # Preprocessor syntax.
+    # Below is our two-pass handling of preprocessor blocks.
+    # First pass: identify any declarations and handle them first.
+    # Second pass: convert preproc blocks to conditional statements.
 
     @visit.register
     def visit(self, node: ast.PreprocIfdef, ctx: TransformCtx) -> Any:
-        
-        # First pass: identify any declarations and handle them first.
-        # Second pass: convert preproc blocks to conditional statements.
-
         move_declarations(node)
         self.visit_children(node, ctx)
         rewrite_as_if(node)
