@@ -127,7 +127,7 @@ def move_var_decl(decl: TreeSitterNode):
 
 # Move any newly-declared functions or variables.
 
-def move_declarations(node: TreeSitterNode):
+def move_decls(node: TreeSitterNode):
     for child in node.children:
 
         # Move function defintions to root node.

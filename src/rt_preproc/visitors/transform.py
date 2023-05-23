@@ -43,7 +43,7 @@ class TransformVisitor(IVisitor):
 
     @visit.register
     def visit(self, node: ast.PreprocIfdef, ctx: TransformCtx) -> Any:
-        move_declarations(node)
+        move_decls(node)
         self.visit_children(node, ctx)
         rewrite_as_if(node)
 
