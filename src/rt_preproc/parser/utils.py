@@ -128,19 +128,14 @@ def move_var_decl(decl: TreeSitterNode):
 # Move any newly-declared functions or variables.
 
 def move_decls(node: TreeSitterNode):
-    for child in node.children:
-
-        # Move function defintions to root node.
-
-        if isinstance(child, FunctionDefinition) \
-        or isinstance(child, FunctionDeclarator):
+    for child in copy(node.children):
+        if isinstance(child, FunctionDefinition):
             move_node(child, get_root_node(child), 0)
-
-        # Move var decls to the parent preproc block.
-
+        if isinstance(child, FunctionDeclarator):
+            move_node(child, get_root_node(child), 0)
         if isinstance(child, Declaration):
             move_var_decl(child)
-
+    
     return
 
 
@@ -158,7 +153,7 @@ def rewrite_as_if(node: TreeSitterNode):
         move_node(if_cond, if_stmt, 0)
         move_node(if_stmt, node.parent, if_idx)
 
-        for (index,child) in enumerate(node.children[1:]):
-            move_node(child, if_body, index)
+        for (child_idx,child) in enumerate(copy(node.children[1:])):
+            move_node(child, if_body, child_idx)
     return
 
