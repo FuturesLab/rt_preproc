@@ -81,26 +81,6 @@ def move_node(node: TreeSitterNode,
     return
 
 
-# Move node from preprocessor block to IF statement.
-
-def move_to_if(node: TreeSitterNode):
-    assert(isinstance(node.parent, PreprocIfdef))
-    par_par = node.parent.parent
-    par_loc = par_par.children.index(node.parent)
-
-    if_stmt = IfStatement()
-    if_cond = ParenthesizedExpression()
-    if_cond.text = ("\"%s\"".encode('utf-8') % get_macro(node.parent))
-    if_body = CompoundStatement()
-
-    move_node(node, if_body, 0)
-    move_node(if_body, if_stmt, 0)
-    move_node(if_cond, if_stmt, 0)
-    move_node(if_stmt, par_par, par_loc)
-
-    return
-
-
 # Move variable declarations.
 
 def move_var_decl(decl: TreeSitterNode):
@@ -143,3 +123,42 @@ def move_var_decl(decl: TreeSitterNode):
         move_node(decl, decl.parent.parent, 0)
     
     return
+
+
+# Move any newly-declared functions or variables.
+
+def move_declarations(node: TreeSitterNode):
+    for child in node.children:
+
+        # Move function defintions to root node.
+
+        if isinstance(child, FunctionDefinition) \
+        or isinstance(child, FunctionDeclarator):
+            move_node(child, get_root_node(child), 0)
+
+        # Move var decls to the parent preproc block.
+
+        if isinstance(child, Declaration):
+            move_var_decl(child)
+
+    return
+
+
+# Rewrite a preprocessor block as an if statement.
+
+def rewrite_as_if(node: TreeSitterNode):
+    if hasattr(node, "children") and len(node.children) > 1:
+        if_stmt = IfStatement()
+        if_cond = ParenthesizedExpression()
+        if_cond.text = ("\"%s\"".encode('utf-8') % get_macro(node))
+        if_body = CompoundStatement()
+        if_idx  = node.parent.children.index(node)
+
+        move_node(if_body, if_stmt, 0)
+        move_node(if_cond, if_stmt, 0)
+        move_node(if_stmt, node.parent, if_idx)
+
+        for (index,child) in enumerate(node.children[1:]):
+            move_node(child, if_body, index)
+    return
+

@@ -41,28 +41,13 @@ class TransformVisitor(IVisitor):
 
     @visit.register
     def visit(self, node: ast.PreprocIfdef, ctx: TransformCtx) -> Any:
-    
-        # First pass: identify any declarations and handle them first.
-
-        for child in node.children:
-            if isinstance(child, ast.Declaration):
-                move_var_decl(child)
-            if isinstance(child, ast.FunctionDefinition):
-                move_node(child, get_root_node(child), 0)   
-            if isinstance(child, ast.FunctionDeclarator):
-                move_node(child, get_root_node(child), 0)
-
-        # Second pass: handle all remaining children.
         
-        for child in node.children:
-            if isinstance(child, ast.IfStatement) \
-            or isinstance(child, ast.ReturnStatement) \
-            or isinstance(child, ast.CompoundStatement) \
-            or isinstance(child, ast.AssignmentExpression) \
-            or isinstance(child, ast.ExpressionStatement) \
-            or isinstance(child, ast.PreprocIfdef):
-                move_to_if(child)
+        # First pass: identify any declarations and handle them first.
+        # Second pass: convert preproc blocks to conditional statements.
 
+        move_declarations(node)
+        self.visit_children(node, ctx)
+        rewrite_as_if(node)
         self.visit_children(node, ctx)
 
     # General expressions...
