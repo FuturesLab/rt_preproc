@@ -48,7 +48,6 @@ class TransformVisitor(IVisitor):
         move_declarations(node)
         self.visit_children(node, ctx)
         rewrite_as_if(node)
-        self.visit_children(node, ctx)
 
     # General expressions...
 
