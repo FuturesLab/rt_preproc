@@ -135,7 +135,6 @@ def move_decls(node: TreeSitterNode):
             move_node(child, get_root_node(child), 0)
         if isinstance(child, Declaration):
             move_var_decl(child)
-    
     return
 
 
