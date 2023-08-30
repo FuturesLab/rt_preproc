@@ -9,7 +9,7 @@ import itertools
     "dir",
     [
         pytest.param(it, id=it.name)
-        for it in os.scandir("tests/c/difftests")
+        for it in os.scandir("tests/c/patchtests")
         if it.is_dir() and not it.name.startswith(("_", "."))
     ],
 )
