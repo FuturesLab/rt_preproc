@@ -11,6 +11,7 @@ python = "^3.10"
 tree-sitter = "^0.20.1"
 cleo = "^2.0.1"
 multimethod = "^1.9.1"
+colorama = "^0.4.6"
 
 [tool.poetry.group.test.dependencies]
 pytest = "^7.3.1"
@@ -32,3 +33,9 @@ test = { callable = "rt_preproc:run_tests" }
 
 [tool.poe.tasks]
 gen_types = "python-tree-sitter-types vendor/tree-sitter-c/src/node-types.json src/rt_preproc/parser/ast.py"
+
+[tool.pytest.ini_options]
+log_cli = true
+log_cli_level = "INFO"
+log_cli_format = "%(asctime)s [%(levelname)8s] %(message)s (%(filename)s:%(lineno)s)"
+log_cli_date_format = "%Y-%m-%d %H:%M:%S"
