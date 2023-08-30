@@ -18,3 +18,7 @@ Examples:
 - `poetry run rt_preproc patch ./tests/c/foo/foo.c`
 - `poetry run rt_preproc graphviz ./tests/c/foo/foo.c`
 - `poetry run pytest` for running tests
+
+## Testing
+
+I'd recommend setting your `CC` environment variable to `tcc` for running tests since we want to compile C files quickly.

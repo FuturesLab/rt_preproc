@@ -32,3 +32,9 @@ test = { callable = "rt_preproc:run_tests" }
 
 [tool.poe.tasks]
 gen_types = "python-tree-sitter-types vendor/tree-sitter-c/src/node-types.json src/rt_preproc/parser/ast.py"
+
+[tool.pytest.ini_options]
+log_cli = true
+log_cli_level = "INFO"
+log_cli_format = "%(asctime)s [%(levelname)8s] %(message)s (%(filename)s:%(lineno)s)"
+log_cli_date_format = "%Y-%m-%d %H:%M:%S"
