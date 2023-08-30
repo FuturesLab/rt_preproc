@@ -4,6 +4,7 @@ import subprocess
 import json
 import itertools
 import logging
+from colorama import Fore, Back, Style
 
 LOGGER = logging.getLogger(__name__)
 
@@ -17,10 +18,9 @@ LOGGER = logging.getLogger(__name__)
 )
 def test_c_func_equivalence(dir: os.DirEntry[str]):
     # make tmp dir
-    c_compiler = os.getenv("CC", "clang")
     if not os.path.exists("tmp"):
         os.mkdir("tmp")
-
+    c_compiler = os.getenv("CC", "clang")
     orig_path = os.path.join(dir.path, "orig.c")
     post_path = os.path.join(dir.path, "post.c")
     conf_path = os.path.join(dir.path, "conf.json")
@@ -49,7 +49,7 @@ def test_c_func_equivalence(dir: os.DirEntry[str]):
             "-o",
             "tmp/orig",
         ]
-        LOGGER.info(f"compiling orig.c: {' '.join(comp_args)}")
+        LOGGER.info(f"compiling orig.c: {Fore.LIGHTBLACK_EX}{' '.join(comp_args)}{Style.RESET_ALL}")
         subprocess.run(comp_args).check_returncode()
         # run orig (no need for env, since macros are compiled in)
         orig_result = subprocess.run(
@@ -58,6 +58,7 @@ def test_c_func_equivalence(dir: os.DirEntry[str]):
         )
         # run post with env macros
         post_result = subprocess.run(["./tmp/post"], capture_output=True, env=env_conf)
-
+        LOGGER.debug(f"orig out: {Fore.CYAN}{orig_result.stdout}{Style.RESET_ALL}")
+        LOGGER.debug(f"post out: {Fore.CYAN}{post_result.stdout}{Style.RESET_ALL}")
         assert orig_result.stdout == post_result.stdout
         assert orig_result.returncode == post_result.returncode

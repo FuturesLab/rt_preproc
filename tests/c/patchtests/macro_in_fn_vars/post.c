@@ -10,8 +10,6 @@ int setup_env_vars() {
   char* foo_str = getenv("FOO");
   if (foo_str) {
     FOO = strtol(foo_str, NULL, 10);
-  } else {
-    fprintf(stderr, "Error: environment variable FOO not set\n");
   }
   return 0;
 }
