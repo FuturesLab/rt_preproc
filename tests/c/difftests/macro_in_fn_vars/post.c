@@ -2,8 +2,8 @@
 #include <stdlib.h>     /* strtol */
 #include <assert.h>     /* assert */
 
-#define POISON_INT 0xdeadbeef
-int FOO = POISON_INT;
+#define UNDEFINED_INT 0xdeadbeef
+int FOO = UNDEFINED_INT;
 
 int setup_env_vars() {
   // FOO
@@ -11,10 +11,8 @@ int setup_env_vars() {
   if (foo_str) {
     FOO = strtol(foo_str, NULL, 10);
   } else {
-    printf("FOO not set\n");
-    return 1;
+    fprintf(stderr, "Error: environment variable FOO not set\n");
   }
-
   return 0;
 }
 
@@ -28,12 +26,12 @@ int main(){
     printf("Error setting up environment variables\n");
     return 1;
   }
-  int x = POISON_INT;
-  if (FOO) {
+  int x = UNDEFINED_INT;
+  if (FOO != UNDEFINED_INT) {
     x = 2;
   }
-  if (FOO) {
-    assert(x != POISON_INT);
+  if (FOO != UNDEFINED_INT) {
+    assert(x != UNDEFINED_INT);
     func(x);
   }
 }
