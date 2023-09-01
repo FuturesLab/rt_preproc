@@ -8,6 +8,7 @@ from colorama import Fore, Back, Style
 
 LOGGER = logging.getLogger(__name__)
 
+
 @pytest.mark.parametrize(
     "dir",
     [
@@ -35,7 +36,7 @@ def test_c_func_equivalence(dir: os.DirEntry[str]):
     )
     for conf_tuple in itertools.product(*conf_set_tup_gen):
         conf = dict(conf_tuple)
-        LOGGER.debug( conf)
+        LOGGER.debug(conf)
         # convert all to string and filter out None (which represents undefined macro)
         env_conf = {}
         for k in conf:
@@ -49,8 +50,15 @@ def test_c_func_equivalence(dir: os.DirEntry[str]):
             "-o",
             "tmp/orig",
         ]
-        LOGGER.info(f"compiling orig.c: {Fore.LIGHTBLACK_EX}{' '.join(comp_args)}{Style.RESET_ALL}")
-        subprocess.run(comp_args).check_returncode()
+        LOGGER.info(
+            f"compiling orig.c: {Fore.LIGHTBLACK_EX}{' '.join(comp_args)}{Style.RESET_ALL}"
+        )
+        should_fail_assert = False
+        if subprocess.run(comp_args).returncode != 0:
+            LOGGER.info(
+                "compilation failed, checking that post.c fails C assert for same conf"
+            )
+            should_fail_assert = True
         # run orig (no need for env, since macros are compiled in)
         orig_result = subprocess.run(
             ["./tmp/orig"],
@@ -58,6 +66,13 @@ def test_c_func_equivalence(dir: os.DirEntry[str]):
         )
         # run post with env macros
         post_result = subprocess.run(["./tmp/post"], capture_output=True, env=env_conf)
+        if should_fail_assert:
+            assert post_result.returncode != 0
+            assert post_result.stderr.startswith(b"Assertion failed")
+            LOGGER.debug(
+                f"post stderr: {Fore.YELLOW}{post_result.stderr}{Style.RESET_ALL}"
+            )
+            continue
         LOGGER.debug(f"orig out: {Fore.CYAN}{orig_result.stdout}{Style.RESET_ALL}")
         LOGGER.debug(f"post out: {Fore.CYAN}{post_result.stdout}{Style.RESET_ALL}")
         assert orig_result.stdout == post_result.stdout
