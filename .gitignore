@@ -15,8 +15,8 @@ test.c
 # Mac shit
 **/.DS_Store
 
-# VSCode
-.vscode/
+# VSCode (we want launch.json)
+# .vscode/
 
 # Distribution / packaging
 .Python

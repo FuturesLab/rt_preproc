@@ -1,0 +1,38 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Python: run poetry print",
+            "type": "python",
+            "request": "launch",
+            "cwd": "${workspaceFolder}/src",
+            "env": {
+                "PYTHONPATH" : "${workspaceFolder}/.venv/bin/python"
+            },
+            "module": "rt_preproc",
+            "justMyCode": false,
+            "args": [
+                "print",
+                "../tests/c/patchtests/macro_in_fn_no_vars/orig.c"
+            ],
+        },
+        {
+            "name": "Python: run poetry graphviz",
+            "type": "python",
+            "request": "launch",
+            "cwd": "${workspaceFolder}/src",
+            "env": {
+                "PYTHONPATH" : "${workspaceFolder}/.venv/bin/python"
+            },
+            "module": "rt_preproc",
+            "justMyCode": false,
+            "args": [
+                "graphviz",
+                "../tests/c/patchtests/macro_in_fn_no_vars/orig.c"
+            ],
+        }
+    ]
+}

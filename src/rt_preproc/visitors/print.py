@@ -152,7 +152,8 @@ class PrintVisitor(IVisitor):
 
     @visit.register
     def visit(self, node: ast.StringLiteral, ctx: PrintCtx) -> Any:
-        self.visit_children(node, ctx)    
+        print(node.text)
+        # self.visit_children(node, ctx)    
     
     @visit.register
     def visit(self, node: ast.NumberLiteral, ctx: PrintCtx) -> Any:
