@@ -13,7 +13,7 @@
                 "PYTHONPATH" : "${workspaceFolder}/.venv/bin/python"
             },
             "module": "rt_preproc",
-            "justMyCode": false,
+            "justMyCode": true,
             "args": [
                 "print",
                 "../tests/c/patchtests/macro_in_fn_no_vars/orig.c"
@@ -28,7 +28,7 @@
                 "PYTHONPATH" : "${workspaceFolder}/.venv/bin/python"
             },
             "module": "rt_preproc",
-            "justMyCode": false,
+            "justMyCode": true,
             "args": [
                 "graphviz",
                 "../tests/c/patchtests/macro_in_fn_no_vars/orig.c"

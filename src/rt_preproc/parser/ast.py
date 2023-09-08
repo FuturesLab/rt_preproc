@@ -9,6 +9,8 @@ class TreeSitterNode(INode):
 
     #def text(self):
     #    return self.base_node.text
+    def get_text(self):
+        return self.base_node.text.decode("utf8")
 
     # this is a manual change to the generated code
     def accept(self, visitor: IVisitor, ctx: IVisitorCtx):
@@ -75,9 +77,17 @@ class AbstractPointerDeclarator(TreeSitterNode):
     children: Optional[List["TypeQualifier"]]
 
 
+class AlignofExpression(TreeSitterNode):
+    field_names = ["type"]
+    type: "TypeDescriptor"
+    children: None
+
+
 class ArgumentList(TreeSitterNode):
     field_names = []
-    children: Optional[List[Union["_expression", "PreprocDefined"]]]
+    children: Optional[
+        List[Union["_expression", "CompoundStatement", "PreprocDefined"]]
+    ]
 
 
 class ArrayDeclarator(TreeSitterNode):
@@ -88,9 +98,6 @@ class ArrayDeclarator(TreeSitterNode):
 
 
 class AssignmentExpression(TreeSitterNode):
-    def __init__(self):
-        self.children = []
-
     field_names = ["left", "operator", "right"]
     left: Union[
         "CallExpression",
@@ -105,7 +112,6 @@ class AssignmentExpression(TreeSitterNode):
     ]
     right: "_expression"
     children: None
-    children = [] # Steve: needs `children` for new IF statements.
 
 
 class Attribute(TreeSitterNode):
@@ -218,7 +224,7 @@ class CastExpression(TreeSitterNode):
 
 class CharLiteral(TreeSitterNode):
     field_names = []
-    children: Optional["EscapeSequence"]
+    children: Union["Character", "EscapeSequence"]
 
 
 class CommaExpression(TreeSitterNode):
@@ -236,9 +242,6 @@ class CompoundLiteralExpression(TreeSitterNode):
 
 
 class CompoundStatement(TreeSitterNode):
-    def __init__(self):
-        self.children = []
-
     field_names = []
     children: Optional[
         List[
@@ -257,19 +260,19 @@ class CompoundStatement(TreeSitterNode):
                 "TypeDefinition",
             ]
         ]
-    ] = [] # Steve: needs `children` for new IF statements.
+    ]
 
 
 class ConcatenatedString(TreeSitterNode):
     field_names = []
-    children: List["StringLiteral"]
+    children: List[Union["Identifier", "StringLiteral"]]
 
 
 class ConditionalExpression(TreeSitterNode):
     field_names = ["alternative", "condition", "consequence"]
     alternative: "_expression"
     condition: "_expression"
-    consequence: "_expression"
+    consequence: Optional["_expression"]
     children: None
 
 
@@ -279,11 +282,8 @@ class ContinueStatement(TreeSitterNode):
 
 
 class Declaration(TreeSitterNode):
-    def __init__(self):
-        self.children = []
-
     field_names = ["declarator", "type"]
-    declarator: List[Union["_declarator", "InitDeclarator"]]
+    declarator: List[Union["_declarator", "GnuAsmExpression", "InitDeclarator"]]
     type: "_typeSpecifier"
     children: Optional[
         List[
@@ -295,7 +295,7 @@ class Declaration(TreeSitterNode):
                 "TypeQualifier",
             ]
         ]
-    ] = []  # Steve: needs `children` for new Decl statements.
+    ]
 
 
 class DeclarationList(TreeSitterNode):
@@ -327,11 +327,17 @@ class DoStatement(TreeSitterNode):
     children: None
 
 
+class ElseClause(TreeSitterNode):
+    field_names = []
+    children: "_statement"
+
+
 class EnumSpecifier(TreeSitterNode):
-    field_names = ["body", "name"]
+    field_names = ["body", "name", "underlying_type"]
     body: Optional["EnumeratorList"]
     name: Optional["TypeIdentifier"]
-    children: None
+    underlying_type: Optional["PrimitiveType"]
+    children: Optional["AttributeSpecifier"]
 
 
 class Enumerator(TreeSitterNode):
@@ -347,11 +353,8 @@ class EnumeratorList(TreeSitterNode):
 
 
 class ExpressionStatement(TreeSitterNode):
-    def __init__(self):
-        self.children = []
-
     field_names = []
-    children: Optional[Union["_expression", "CommaExpression"]] = []  # Steve: needs `children` for new IF statements.
+    children: Optional[Union["_expression", "CommaExpression"]]
 
 
 class FieldDeclaration(TreeSitterNode):
@@ -414,7 +417,7 @@ class FunctionDeclarator(TreeSitterNode):
     field_names = ["declarator", "parameters"]
     declarator: Union["_declarator", "_fieldDeclarator", "_typeDeclarator"]
     parameters: "ParameterList"
-    children: Optional[List["AttributeSpecifier"]]
+    children: Optional[List[Union["AttributeSpecifier", "GnuAsmExpression"]]]
 
 
 class FunctionDefinition(TreeSitterNode):
@@ -427,6 +430,7 @@ class FunctionDefinition(TreeSitterNode):
             Union[
                 "AttributeDeclaration",
                 "AttributeSpecifier",
+                "Declaration",
                 "MsCallModifier",
                 "MsDeclspecModifier",
                 "StorageClassSpecifier",
@@ -436,6 +440,72 @@ class FunctionDefinition(TreeSitterNode):
     ]
 
 
+class GenericExpression(TreeSitterNode):
+    field_names = []
+    children: List[Union["_expression", "TypeDescriptor"]]
+
+
+class GnuAsmClobberList(TreeSitterNode):
+    field_names = ["register"]
+    register: Optional[List["StringLiteral"]]
+    children: None
+
+
+class GnuAsmExpression(TreeSitterNode):
+    field_names = [
+        "assembly_code",
+        "clobbers",
+        "goto_labels",
+        "input_operands",
+        "output_operands",
+    ]
+    assembly_code: Union["ConcatenatedString", "StringLiteral"]
+    clobbers: Optional["GnuAsmClobberList"]
+    goto_labels: Optional["GnuAsmGotoList"]
+    input_operands: Optional["GnuAsmInputOperandList"]
+    output_operands: Optional["GnuAsmOutputOperandList"]
+    children: Optional[List["GnuAsmQualifier"]]
+
+
+class GnuAsmGotoList(TreeSitterNode):
+    field_names = ["label"]
+    label: Optional[List["Identifier"]]
+    children: None
+
+
+class GnuAsmInputOperand(TreeSitterNode):
+    field_names = ["constraint", "symbol", "value"]
+    constraint: "StringLiteral"
+    symbol: Optional["Identifier"]
+    value: "_expression"
+    children: None
+
+
+class GnuAsmInputOperandList(TreeSitterNode):
+    field_names = ["operand"]
+    operand: Optional[List["GnuAsmInputOperand"]]
+    children: None
+
+
+class GnuAsmOutputOperand(TreeSitterNode):
+    field_names = ["constraint", "symbol", "value"]
+    constraint: "StringLiteral"
+    symbol: Optional["Identifier"]
+    value: "Identifier"
+    children: None
+
+
+class GnuAsmOutputOperandList(TreeSitterNode):
+    field_names = ["operand"]
+    operand: Optional[List["GnuAsmOutputOperand"]]
+    children: None
+
+
+class GnuAsmQualifier(TreeSitterNode):
+    field_names = []
+    children: None
+
+
 class GotoStatement(TreeSitterNode):
     field_names = ["label"]
     label: "StatementIdentifier"
@@ -443,15 +513,11 @@ class GotoStatement(TreeSitterNode):
 
 
 class IfStatement(TreeSitterNode):
-    def __init__(self):
-        self.children = []
-
     field_names = ["alternative", "condition", "consequence"]
-    alternative: Optional["_statement"]
+    alternative: Optional["ElseClause"]
     condition: "ParenthesizedExpression"
     consequence: "_statement"
-    #children: None
-    children = []
+    children: None
 
 
 class InitDeclarator(TreeSitterNode):
@@ -523,6 +589,18 @@ class MsUnalignedPtrModifier(TreeSitterNode):
     children: None
 
 
+class Null(TreeSitterNode):
+    field_names = []
+    children: None
+
+
+class OffsetofExpression(TreeSitterNode):
+    field_names = ["member", "type"]
+    member: "FieldIdentifier"
+    type: "TypeDescriptor"
+    children: None
+
+
 class ParameterDeclaration(TreeSitterNode):
     field_names = ["declarator", "type"]
     declarator: Optional[Union["_abstractDeclarator", "_declarator"]]
@@ -542,7 +620,9 @@ class ParameterDeclaration(TreeSitterNode):
 
 class ParameterList(TreeSitterNode):
     field_names = []
-    children: Optional[List[Union["ParameterDeclaration", "VariadicParameter"]]]
+    children: Optional[
+        List[Union["Identifier", "ParameterDeclaration", "VariadicParameter"]]
+    ]
 
 
 class ParenthesizedDeclarator(TreeSitterNode):
@@ -551,12 +631,8 @@ class ParenthesizedDeclarator(TreeSitterNode):
 
 
 class ParenthesizedExpression(TreeSitterNode):
-    def __init__(self):
-        self.children = []
-
     field_names = []
-    children: Union["_expression", "CommaExpression", "PreprocDefined"] \
-        = [] # Steve: needs `children` for new IF statements.
+    children: Union["_expression", "CommaExpression", "PreprocDefined"]
 
 
 class PointerDeclarator(TreeSitterNode):
@@ -613,6 +689,30 @@ class PreprocElif(TreeSitterNode):
                 "_typeSpecifier",
                 "Declaration",
                 "FieldDeclaration",
+                "FunctionDefinition",
+                "LinkageSpecification",
+                "PreprocCall",
+                "PreprocDef",
+                "PreprocFunctionDef",
+                "PreprocIf",
+                "PreprocIfdef",
+                "PreprocInclude",
+                "TypeDefinition",
+            ]
+        ]
+    ]
+
+
+class PreprocElifdef(TreeSitterNode):
+    field_names = ["alternative", "name"]
+    alternative: Optional[Union["PreprocElif", "PreprocElse"]]
+    name: "Identifier"
+    children: Optional[
+        List[
+            Union[
+                "_statement",
+                "_typeSpecifier",
+                "Declaration",
                 "FunctionDefinition",
                 "LinkageSpecification",
                 "PreprocCall",
@@ -694,7 +794,7 @@ class PreprocIf(TreeSitterNode):
 
 class PreprocIfdef(TreeSitterNode):
     field_names = ["alternative", "name"]
-    alternative: Optional[Union["PreprocElif", "PreprocElse"]]
+    alternative: Optional[Union["PreprocElif", "PreprocElifdef", "PreprocElse"]]
     name: "Identifier"
     children: Optional[
         List[
@@ -753,14 +853,14 @@ class StorageClassSpecifier(TreeSitterNode):
 
 class StringLiteral(TreeSitterNode):
     field_names = []
-    children: Optional[List["EscapeSequence"]]
+    children: Optional[List[Union["EscapeSequence", "StringContent"]]]
 
 
 class StructSpecifier(TreeSitterNode):
     field_names = ["body", "name"]
     body: Optional["FieldDeclarationList"]
     name: Optional["TypeIdentifier"]
-    children: Optional["MsDeclspecModifier"]
+    children: Optional[List[Union["AttributeSpecifier", "MsDeclspecModifier"]]]
 
 
 class SubscriptDesignator(TreeSitterNode):
@@ -787,10 +887,20 @@ class TranslationUnit(TreeSitterNode):
     children: Optional[
         List[
             Union[
-                "_statement",
                 "_typeSpecifier",
+                "AttributedStatement",
+                "BreakStatement",
+                "CaseStatement",
+                "CompoundStatement",
+                "ContinueStatement",
                 "Declaration",
+                "DoStatement",
+                "ExpressionStatement",
+                "ForStatement",
                 "FunctionDefinition",
+                "GotoStatement",
+                "IfStatement",
+                "LabeledStatement",
                 "LinkageSpecification",
                 "PreprocCall",
                 "PreprocDef",
@@ -798,7 +908,10 @@ class TranslationUnit(TreeSitterNode):
                 "PreprocIf",
                 "PreprocIfdef",
                 "PreprocInclude",
+                "ReturnStatement",
+                "SwitchStatement",
                 "TypeDefinition",
+                "WhileStatement",
             ]
         ]
     ]
@@ -808,7 +921,7 @@ class TypeDefinition(TreeSitterNode):
     field_names = ["declarator", "type"]
     declarator: List["_typeDeclarator"]
     type: "_typeSpecifier"
-    children: Optional[List["TypeQualifier"]]
+    children: Optional[List[Union["AttributeSpecifier", "TypeQualifier"]]]
 
 
 class TypeDescriptor(TreeSitterNode):
@@ -834,7 +947,7 @@ class UnionSpecifier(TreeSitterNode):
     field_names = ["body", "name"]
     body: Optional["FieldDeclarationList"]
     name: Optional["TypeIdentifier"]
-    children: Optional["MsDeclspecModifier"]
+    children: Optional[List[Union["AttributeSpecifier", "MsDeclspecModifier"]]]
 
 
 class UpdateExpression(TreeSitterNode):
@@ -853,6 +966,11 @@ class WhileStatement(TreeSitterNode):
     field_names = ["body", "condition"]
     body: "_statement"
     condition: "ParenthesizedExpression"
+    children: None
+
+
+class Character(TreeSitterNode):
+    field_names = []
     children: None
 
 
@@ -896,11 +1014,6 @@ class MsUnsignedPtrModifier(TreeSitterNode):
     children: None
 
 
-class Null(TreeSitterNode):
-    field_names = []
-    children: None
-
-
 class NumberLiteral(TreeSitterNode):
     field_names = []
     children: None
@@ -926,6 +1039,11 @@ class StatementIdentifier(TreeSitterNode):
     children: None
 
 
+class StringContent(TreeSitterNode):
+    field_names = []
+    children: None
+
+
 class SystemLibString(TreeSitterNode):
     field_names = []
     children: None
@@ -940,13 +1058,16 @@ class TypeIdentifier(TreeSitterNode):
     field_names = []
     children: None
 
+class Operator(TreeSitterNode):
+    field_names = []
+    children: None
 
 type_name_to_class = {
-    "+": _expression,
-    "-": _expression,
-    "=": _expression,
-    "^": _expression,
-    "*": _expression,
+    "+": Operator,
+    "-": Operator,
+    "=": Operator,
+    "^": Operator,
+    "*": Operator,
     "_abstract_declarator": _abstractDeclarator,
     "_declarator": _declarator,
     "_expression": _expression,
@@ -958,6 +1079,7 @@ type_name_to_class = {
     "abstract_function_declarator": AbstractFunctionDeclarator,
     "abstract_parenthesized_declarator": AbstractParenthesizedDeclarator,
     "abstract_pointer_declarator": AbstractPointerDeclarator,
+    "alignof_expression": AlignofExpression,
     "argument_list": ArgumentList,
     "array_declarator": ArrayDeclarator,
     "assignment_expression": AssignmentExpression,
@@ -982,6 +1104,7 @@ type_name_to_class = {
     "declaration": Declaration,
     "declaration_list": DeclarationList,
     "do_statement": DoStatement,
+    "else_clause": ElseClause,
     "enum_specifier": EnumSpecifier,
     "enumerator": Enumerator,
     "enumerator_list": EnumeratorList,
@@ -993,6 +1116,15 @@ type_name_to_class = {
     "for_statement": ForStatement,
     "function_declarator": FunctionDeclarator,
     "function_definition": FunctionDefinition,
+    "generic_expression": GenericExpression,
+    "gnu_asm_clobber_list": GnuAsmClobberList,
+    "gnu_asm_expression": GnuAsmExpression,
+    "gnu_asm_goto_list": GnuAsmGotoList,
+    "gnu_asm_input_operand": GnuAsmInputOperand,
+    "gnu_asm_input_operand_list": GnuAsmInputOperandList,
+    "gnu_asm_output_operand": GnuAsmOutputOperand,
+    "gnu_asm_output_operand_list": GnuAsmOutputOperandList,
+    "gnu_asm_qualifier": GnuAsmQualifier,
     "goto_statement": GotoStatement,
     "if_statement": IfStatement,
     "init_declarator": InitDeclarator,
@@ -1006,6 +1138,8 @@ type_name_to_class = {
     "ms_declspec_modifier": MsDeclspecModifier,
     "ms_pointer_modifier": MsPointerModifier,
     "ms_unaligned_ptr_modifier": MsUnalignedPtrModifier,
+    "null": Null,
+    "offsetof_expression": OffsetofExpression,
     "parameter_declaration": ParameterDeclaration,
     "parameter_list": ParameterList,
     "parenthesized_declarator": ParenthesizedDeclarator,
@@ -1016,6 +1150,7 @@ type_name_to_class = {
     "preproc_def": PreprocDef,
     "preproc_defined": PreprocDefined,
     "preproc_elif": PreprocElif,
+    "preproc_elifdef": PreprocElifdef,
     "preproc_else": PreprocElse,
     "preproc_function_def": PreprocFunctionDef,
     "preproc_if": PreprocIf,
@@ -1040,6 +1175,7 @@ type_name_to_class = {
     "update_expression": UpdateExpression,
     "variadic_parameter": VariadicParameter,
     "while_statement": WhileStatement,
+    "character": Character,
     "comment": Comment,
     "escape_sequence": EscapeSequence,
     "false": False,
@@ -1048,12 +1184,12 @@ type_name_to_class = {
     "ms_restrict_modifier": MsRestrictModifier,
     "ms_signed_ptr_modifier": MsSignedPtrModifier,
     "ms_unsigned_ptr_modifier": MsUnsignedPtrModifier,
-    "null": Null,
     "number_literal": NumberLiteral,
     "preproc_arg": PreprocArg,
     "preproc_directive": PreprocDirective,
     "primitive_type": PrimitiveType,
     "statement_identifier": StatementIdentifier,
+    "string_content": StringContent,
     "system_lib_string": SystemLibString,
     "true": True,
     "type_identifier": TypeIdentifier,
