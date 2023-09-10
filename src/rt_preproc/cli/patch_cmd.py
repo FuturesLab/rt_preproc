@@ -18,16 +18,15 @@ class PatchCmd(Command):
         file = self.argument("file")
         self.line(f"File: {file}")
         with open(file, mode="rb") as f:
-            bytes  = f.read()
-            ds     = Parser()
-            tree   = ds.parse(bytes)
-            nodes  = ds.query(tree)
+            bytes = f.read()
+            ds = Parser()
+            tree = ds.parse(bytes)
 
             root_node = AstNode.reify(tree.root_node)
 
             self.line("\n---- ORIGINAL C SOURCE ----")
             printer = PrintVisitor()
-            root_node.accept(printer, PrintCtx()) 
+            root_node.accept(printer, PrintCtx())
 
             visitor = TransformVisitor()
             root_node.accept(visitor, TransformCtx())
@@ -35,5 +34,3 @@ class PatchCmd(Command):
             self.line("\n---- PATCHED C SOURCE ----")
             printer = PrintVisitor()
             root_node.accept(printer, PrintCtx())
-
-

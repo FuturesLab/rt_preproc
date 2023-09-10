@@ -1,6 +1,6 @@
-from tree_sitter import Node
 from rt_preproc.parser import ast
 from copy import copy
+
 
 # Hacky way to recurse AST to get root node.
 def get_root_node(node: ast.AstNode):

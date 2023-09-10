@@ -1,87 +1,85 @@
-from typing import Union, Any, Optional, List, Self
+from typing import Union, Optional, List, Self
 from tree_sitter import Node as BaseTsNode
 from rt_preproc.parser.base import INode
 from rt_preproc.visitors.base import IVisitor, IVisitorCtx
 
 
 class AstNode(INode):
-    base_node: BaseTsNode
+    base_node: Optional[BaseTsNode]
+    """
+    In certain cases, like Whitespace, there is no base node.
+    This will be None in those cases.
+    """
     parent: Optional[Self]
     field_names: List[str]
-    children: Optional[List[Self]]
+    children: List[Self]
+    named_children: List[Self]
     children_named_idxs: List[Optional[int]]
-    named_children: Optional[List[Self]]
+    """
+    This is a list the same length as children, where each element
+    is either `None` (if the child is not a named child)
+    or the index of the child in the `named_children` list.
+    """
     text: Optional[str]
     """
     This is only defined on leaf nodes.
     """
 
-    def get_text(self) -> str:
-        return self.base_node.text.decode("utf8")
+    def __init__(self) -> None:
+        self.base_node = None
+        self.parent = None
+        self.children = []
+        self.named_children = []
+        self.children_named_idxs = []
+        self.text = None
 
-    # this is a manual change to the generated code
     def accept(self, visitor: IVisitor, ctx: IVisitorCtx):
         return visitor.visit(self, ctx)
 
     @staticmethod
     def reify(base_node: BaseTsNode, include_whitespace: bool = True) -> "AstNode":
+        """
+        Reify a tree_sitter Node into an AstNode, and recurse for all children.
+        This will also include whitespace nodes if include_whitespace is True.
+        """
         ast_node = (
             type_name_to_class[base_node.type]()
             if base_node.type in type_name_to_class
             else Unnamed()
         )
         ast_node.base_node = base_node
-        ast_node.parent = None
-        ast_node.children = []
-        ast_node.children_named_idxs = []
+        # TODO: don't duplicate the work, use the children_named_idxs list
+        ast_node.named_children = [AstNode.reify(x) for x in base_node.named_children]
+
         for i, child in enumerate(base_node.children):
             if include_whitespace and i > 0:
+                cur_start_line, cur_start_col = child.start_point
+                prev_end_line, prev_end_col = base_node.children[i - 1].end_point
                 # if the previous child ends before the current child starts
-                if base_node.children[i - 1].end_point[0] < child.start_point[0]:
+                if prev_end_line < cur_start_line:
                     ast_node.children.append(
-                        Whitespace(
-                            "\n"
-                            * (
-                                child.start_point[0]
-                                - base_node.children[i - 1].end_point[0]
-                            )
-                        )
+                        Whitespace("\n" * (cur_start_line - prev_end_line))
                     )
-                    if child.start_point[1] > 0:
-                        ast_node.children.append(
-                            Whitespace(" " * (child.start_point[1]))
-                        )
-                elif base_node.children[i - 1].end_point[1] < child.start_point[1]:
+                    if cur_start_col > 0:
+                        ast_node.children.append(Whitespace(" " * cur_start_col))
+                elif prev_end_col < cur_start_col:
                     ast_node.children.append(
-                        Whitespace(
-                            " "
-                            * (
-                                child.start_point[1]
-                                - base_node.children[i - 1].end_point[1]
-                            )
-                        )
+                        Whitespace(" " * (cur_start_col - prev_end_col))
                     )
             ast_node.children.append(AstNode.reify(child, include_whitespace))
-        # if the last child ends before the base node ends
+        # if the last child ends before the parent base node ends
         if include_whitespace and len(base_node.children) > 0:
-            if base_node.children[-1].end_point[0] < base_node.end_point[0]:
+            par_end_line, par_end_col = base_node.end_point
+            last_end_line, last_end_col = base_node.children[-1].end_point
+            if last_end_line < par_end_line:
                 ast_node.children.append(
-                    Whitespace(
-                        "\n"
-                        * (base_node.end_point[0] - base_node.children[-1].end_point[0])
-                    )
+                    Whitespace("\n" * (par_end_line - last_end_line))
                 )
-                if base_node.start_point[1] > 0:
-                    ast_node.children.append(
-                        Whitespace(" " * (child.start_point[1]))
-                    )
-            elif base_node.children[-1].end_point[1] < base_node.end_point[1]:
-                ast_node.children.append(
-                    Whitespace(
-                        " "
-                        * (base_node.end_point[1] - base_node.children[-1].end_point[1])
-                    )
-                )
+                if par_end_col > 0:
+                    ast_node.children.append(Whitespace(" " * par_end_col))
+            elif last_end_col < par_end_col:
+                ast_node.children.append(Whitespace(" " * (par_end_col - last_end_col)))
+
         for child in ast_node.children:
             ast_node.children_named_idxs.append(
                 next(
@@ -99,12 +97,15 @@ class AstNode(INode):
             sum(1 for val in ast_node.children_named_idxs if val is not None)
             == base_node.named_child_count
         )
-        ast_node.named_children = [AstNode.reify(x) for x in base_node.named_children]
         if len(ast_node.children) == 0:
-            ast_node.text = base_node.text.decode("utf8")
+            ast_node.text = base_node.text.decode()
         else:
             ast_node.text = None
         return ast_node
+
+
+# Generated code below:
+#
 
 
 class _abstractDeclarator(AstNode):
@@ -1161,15 +1162,8 @@ class Unnamed(AstNode):
 
 class Whitespace(AstNode):
     def __init__(self, text: str):
+        super().__init__()
         self.text = text
-        self.id = None
-        self.named_child_count = None
-        self.named_children = None
-        self.children_named_idxs = None
-        self.base_node = None
-        
-    def get_text(self) -> str:
-        return self.text
 
     field_names = []
     children: None

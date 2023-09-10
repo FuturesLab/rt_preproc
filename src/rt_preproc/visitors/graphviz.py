@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, Union
 import rt_preproc.parser.ast as ast
 from typing import Optional
 from multimethod import multimethod
@@ -25,7 +25,7 @@ def table_label(node: ast.AstNode):
         "<<TABLE><TR><TD>"
         + node.__class__.__name__
         + "</TD></TR><TR><TD>"
-        + escape(node.get_text())
+        + escape(node.text)
         + "</TD></TR></TABLE>>"
     )
 
@@ -48,16 +48,13 @@ class GraphVizVisitor(IVisitor):
             self.buf += (
                 f'\t"{stringize_node(ctx.parent)}" -> "{stringize_node(node)}";\n'
             )
-        if hasattr(node, "children") and node.named_children is not None:
-            self.buf += 'subgraph "cluster_' + stringize_node(node) + '" {\n'
-            out = [
-                child.accept(self, GraphVizCtx(parent=node))
-                for child in node.named_children
-                if child is not None
-            ]
-            self.buf += "}\n"
-            return out
-        return []
+        self.buf += 'subgraph "cluster_' + stringize_node(node) + '" {\n'
+        out = [
+            child.accept(self, GraphVizCtx(parent=node))
+            for child in node.named_children
+        ]
+        self.buf += "}\n"
+        return out
 
     @multimethod
     def visit(self, node: ast.AstNode, ctx: GraphVizCtx) -> Any:
@@ -72,23 +69,17 @@ class GraphVizVisitor(IVisitor):
         print(self.buf)
 
     @visit.register
-    def visit(self, node: ast.Identifier, ctx: GraphVizCtx) -> Any:
-        self.visit_named_children(node, ctx, label=table_label(node))
-
-    @visit.register
-    def visit(self, node: ast.StringLiteral, ctx: GraphVizCtx) -> Any:
-        self.visit_named_children(node, ctx, label=table_label(node))
-
-    @visit.register
-    def visit(self, node: ast.NumberLiteral, ctx: GraphVizCtx) -> Any:
-        self.visit_named_children(node, ctx, label=table_label(node))
-
-    @visit.register
-    def visit(self, node: ast.PrimitiveType, ctx: GraphVizCtx) -> Any:
-        self.visit_named_children(node, ctx, label=table_label(node))
-
-    @visit.register
-    def visit(self, node: ast.SystemLibString, ctx: GraphVizCtx) -> Any:
+    def visit(
+        self,
+        node: Union[
+            ast.Identifier,
+            ast.StringContent,
+            ast.NumberLiteral,
+            ast.PrimitiveType,
+            ast.SystemLibString,
+        ],
+        ctx: GraphVizCtx,
+    ) -> Any:
         self.visit_named_children(node, ctx, label=table_label(node))
 
 
@@ -111,7 +102,7 @@ type_name_to_color = {
     "preproc_directive": 2,
     "primitive_type": 6,
     "system_lib_string": 7,
-    "string_literal": 5,
+    "string_content": 5,
     "true": 8,
     "type_identifier": 9,
 }
