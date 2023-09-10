@@ -1,8 +1,7 @@
 from cleo.commands.command import Command
 from cleo.helpers import argument
-from rt_preproc.parser.ast import TreeSitterNode
+from rt_preproc.parser.ast import AstNode
 from rt_preproc.parser.parser import Parser
-from rt_preproc.parser.utils import reify
 from rt_preproc.visitors.graphviz import GraphVizCtx, GraphVizVisitor
 
 
@@ -18,6 +17,6 @@ class GraphvizCmd(Command):
             bytes = f.read()
             ds = Parser()
             tree = ds.parse(bytes)
-            root_node: TreeSitterNode = reify(tree.root_node)
+            root_node = AstNode.reify(tree.root_node)
             visitor = GraphVizVisitor()
             root_node.accept(visitor, GraphVizCtx())
