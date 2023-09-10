@@ -8,7 +8,7 @@ import copy
 from rt_preproc.parser.utils import *
 
 class TransformCtx(IVisitorCtx):
-    def __init__(self, parent: Optional[ast.TreeSitterNode] = None) -> None:
+    def __init__(self, parent: Optional[ast.AstNode] = None) -> None:
         self.parent = parent
 
 class TransformVisitor(IVisitor):
@@ -19,7 +19,7 @@ class TransformVisitor(IVisitor):
         self.seen = []
 
     def visit_children(
-        self, node: ast.TreeSitterNode, ctx: TransformCtx, label: str = None
+        self, node: ast.AstNode, ctx: TransformCtx, label: str = None
     ) -> list[Any]:
 
         if hasattr(node, "children") and node.children is not None:

@@ -1,103 +1,193 @@
-from typing import Union, Any, Optional, List
-
+from typing import Union, Any, Optional, List, Self
+from tree_sitter import Node as BaseTsNode
 from rt_preproc.parser.base import INode
 from rt_preproc.visitors.base import IVisitor, IVisitorCtx
 
 
-class TreeSitterNode(INode):
-    base_node: Any
+class AstNode(INode):
+    base_node: BaseTsNode
+    parent: Optional[Self]
+    field_names: List[str]
+    children: Optional[List[Self]]
+    children_named_idxs: List[Optional[int]]
+    named_children: Optional[List[Self]]
+    text: Optional[str]
+    """
+    This is only defined on leaf nodes.
+    """
 
-    #def text(self):
-    #    return self.base_node.text
-    def get_text(self):
+    def get_text(self) -> str:
         return self.base_node.text.decode("utf8")
 
     # this is a manual change to the generated code
     def accept(self, visitor: IVisitor, ctx: IVisitorCtx):
         return visitor.visit(self, ctx)
 
+    @staticmethod
+    def reify(base_node: BaseTsNode, include_whitespace: bool = True) -> "AstNode":
+        ast_node = (
+            type_name_to_class[base_node.type]()
+            if base_node.type in type_name_to_class
+            else Unnamed()
+        )
+        ast_node.base_node = base_node
+        ast_node.parent = None
+        ast_node.children = []
+        ast_node.children_named_idxs = []
+        for i, child in enumerate(base_node.children):
+            if include_whitespace and i > 0:
+                # if the previous child ends before the current child starts
+                if base_node.children[i - 1].end_point[0] < child.start_point[0]:
+                    ast_node.children.append(
+                        Whitespace(
+                            "\n"
+                            * (
+                                child.start_point[0]
+                                - base_node.children[i - 1].end_point[0]
+                            )
+                        )
+                    )
+                    if child.start_point[1] > 0:
+                        ast_node.children.append(
+                            Whitespace(" " * (child.start_point[1]))
+                        )
+                elif base_node.children[i - 1].end_point[1] < child.start_point[1]:
+                    ast_node.children.append(
+                        Whitespace(
+                            " "
+                            * (
+                                child.start_point[1]
+                                - base_node.children[i - 1].end_point[1]
+                            )
+                        )
+                    )
+            ast_node.children.append(AstNode.reify(child, include_whitespace))
+        # if the last child ends before the base node ends
+        if include_whitespace and len(base_node.children) > 0:
+            if base_node.children[-1].end_point[0] < base_node.end_point[0]:
+                ast_node.children.append(
+                    Whitespace(
+                        "\n"
+                        * (base_node.end_point[0] - base_node.children[-1].end_point[0])
+                    )
+                )
+                if base_node.start_point[1] > 0:
+                    ast_node.children.append(
+                        Whitespace(" " * (child.start_point[1]))
+                    )
+            elif base_node.children[-1].end_point[1] < base_node.end_point[1]:
+                ast_node.children.append(
+                    Whitespace(
+                        " "
+                        * (base_node.end_point[1] - base_node.children[-1].end_point[1])
+                    )
+                )
+        for child in ast_node.children:
+            ast_node.children_named_idxs.append(
+                next(
+                    (
+                        idx
+                        for idx, node in enumerate(base_node.named_children)
+                        if hasattr(child, "base_node")
+                        and child.base_node is not None
+                        and node.id == child.base_node.id
+                    ),
+                    None,
+                )
+            )
+        assert (
+            sum(1 for val in ast_node.children_named_idxs if val is not None)
+            == base_node.named_child_count
+        )
+        ast_node.named_children = [AstNode.reify(x) for x in base_node.named_children]
+        if len(ast_node.children) == 0:
+            ast_node.text = base_node.text.decode("utf8")
+        else:
+            ast_node.text = None
+        return ast_node
 
-class _abstractDeclarator(TreeSitterNode):
+
+class _abstractDeclarator(AstNode):
     field_names = []
     children: None
 
 
-class _declarator(TreeSitterNode):
+class _declarator(AstNode):
     field_names = []
     children: None
 
 
-class _expression(TreeSitterNode):
+class _expression(AstNode):
     field_names = []
     children: None
 
 
-class _fieldDeclarator(TreeSitterNode):
+class _fieldDeclarator(AstNode):
     field_names = []
     children: None
 
 
-class _statement(TreeSitterNode):
+class _statement(AstNode):
     field_names = []
     children: None
 
 
-class _typeDeclarator(TreeSitterNode):
+class _typeDeclarator(AstNode):
     field_names = []
     children: None
 
 
-class _typeSpecifier(TreeSitterNode):
+class _typeSpecifier(AstNode):
     field_names = []
     children: None
 
 
-class AbstractArrayDeclarator(TreeSitterNode):
+class AbstractArrayDeclarator(AstNode):
     field_names = ["declarator", "size"]
     declarator: Optional["_abstractDeclarator"]
     size: Optional[Union["str", "_expression"]]
     children: Optional[List["TypeQualifier"]]
 
 
-class AbstractFunctionDeclarator(TreeSitterNode):
+class AbstractFunctionDeclarator(AstNode):
     field_names = ["declarator", "parameters"]
     declarator: Optional["_abstractDeclarator"]
     parameters: "ParameterList"
     children: None
 
 
-class AbstractParenthesizedDeclarator(TreeSitterNode):
+class AbstractParenthesizedDeclarator(AstNode):
     field_names = []
     children: "_abstractDeclarator"
 
 
-class AbstractPointerDeclarator(TreeSitterNode):
+class AbstractPointerDeclarator(AstNode):
     field_names = ["declarator"]
     declarator: Optional["_abstractDeclarator"]
     children: Optional[List["TypeQualifier"]]
 
 
-class AlignofExpression(TreeSitterNode):
+class AlignofExpression(AstNode):
     field_names = ["type"]
     type: "TypeDescriptor"
     children: None
 
 
-class ArgumentList(TreeSitterNode):
+class ArgumentList(AstNode):
     field_names = []
     children: Optional[
         List[Union["_expression", "CompoundStatement", "PreprocDefined"]]
     ]
 
 
-class ArrayDeclarator(TreeSitterNode):
+class ArrayDeclarator(AstNode):
     field_names = ["declarator", "size"]
     declarator: Union["_declarator", "_fieldDeclarator", "_typeDeclarator"]
     size: Optional[Union["str", "_expression"]]
     children: Optional[List["TypeQualifier"]]
 
 
-class AssignmentExpression(TreeSitterNode):
+class AssignmentExpression(AstNode):
     field_names = ["left", "operator", "right"]
     left: Union[
         "CallExpression",
@@ -114,24 +204,24 @@ class AssignmentExpression(TreeSitterNode):
     children: None
 
 
-class Attribute(TreeSitterNode):
+class Attribute(AstNode):
     field_names = ["name", "prefix"]
     name: "Identifier"
     prefix: Optional["Identifier"]
     children: Optional["ArgumentList"]
 
 
-class AttributeDeclaration(TreeSitterNode):
+class AttributeDeclaration(AstNode):
     field_names = []
     children: List["Attribute"]
 
 
-class AttributeSpecifier(TreeSitterNode):
+class AttributeSpecifier(AstNode):
     field_names = []
     children: "ArgumentList"
 
 
-class AttributedDeclarator(TreeSitterNode):
+class AttributedDeclarator(AstNode):
     field_names = []
     children: List[
         Union[
@@ -140,12 +230,12 @@ class AttributedDeclarator(TreeSitterNode):
     ]
 
 
-class AttributedStatement(TreeSitterNode):
+class AttributedStatement(AstNode):
     field_names = []
     children: List[Union["_statement", "AttributeDeclaration"]]
 
 
-class BinaryExpression(TreeSitterNode):
+class BinaryExpression(AstNode):
     field_names = ["left", "operator", "right"]
     left: Union["_expression", "PreprocDefined"]
     operator: Union[
@@ -172,24 +262,24 @@ class BinaryExpression(TreeSitterNode):
     children: None
 
 
-class BitfieldClause(TreeSitterNode):
+class BitfieldClause(AstNode):
     field_names = []
     children: "_expression"
 
 
-class BreakStatement(TreeSitterNode):
+class BreakStatement(AstNode):
     field_names = []
     children: None
 
 
-class CallExpression(TreeSitterNode):
+class CallExpression(AstNode):
     field_names = ["arguments", "function"]
     arguments: "ArgumentList"
     function: "_expression"
     children: None
 
 
-class CaseStatement(TreeSitterNode):
+class CaseStatement(AstNode):
     field_names = ["value"]
     value: Optional["_expression"]
     children: Optional[
@@ -215,33 +305,33 @@ class CaseStatement(TreeSitterNode):
     ]
 
 
-class CastExpression(TreeSitterNode):
+class CastExpression(AstNode):
     field_names = ["type", "value"]
     type: "TypeDescriptor"
     value: "_expression"
     children: None
 
 
-class CharLiteral(TreeSitterNode):
+class CharLiteral(AstNode):
     field_names = []
     children: Union["Character", "EscapeSequence"]
 
 
-class CommaExpression(TreeSitterNode):
+class CommaExpression(AstNode):
     field_names = ["left", "right"]
     left: "_expression"
     right: Union["_expression", "CommaExpression"]
     children: None
 
 
-class CompoundLiteralExpression(TreeSitterNode):
+class CompoundLiteralExpression(AstNode):
     field_names = ["type", "value"]
     type: "TypeDescriptor"
     value: "InitializerList"
     children: None
 
 
-class CompoundStatement(TreeSitterNode):
+class CompoundStatement(AstNode):
     field_names = []
     children: Optional[
         List[
@@ -263,12 +353,12 @@ class CompoundStatement(TreeSitterNode):
     ]
 
 
-class ConcatenatedString(TreeSitterNode):
+class ConcatenatedString(AstNode):
     field_names = []
     children: List[Union["Identifier", "StringLiteral"]]
 
 
-class ConditionalExpression(TreeSitterNode):
+class ConditionalExpression(AstNode):
     field_names = ["alternative", "condition", "consequence"]
     alternative: "_expression"
     condition: "_expression"
@@ -276,12 +366,12 @@ class ConditionalExpression(TreeSitterNode):
     children: None
 
 
-class ContinueStatement(TreeSitterNode):
+class ContinueStatement(AstNode):
     field_names = []
     children: None
 
 
-class Declaration(TreeSitterNode):
+class Declaration(AstNode):
     field_names = ["declarator", "type"]
     declarator: List[Union["_declarator", "GnuAsmExpression", "InitDeclarator"]]
     type: "_typeSpecifier"
@@ -298,7 +388,7 @@ class Declaration(TreeSitterNode):
     ]
 
 
-class DeclarationList(TreeSitterNode):
+class DeclarationList(AstNode):
     field_names = []
     children: Optional[
         List[
@@ -320,19 +410,19 @@ class DeclarationList(TreeSitterNode):
     ]
 
 
-class DoStatement(TreeSitterNode):
+class DoStatement(AstNode):
     field_names = ["body", "condition"]
     body: "_statement"
     condition: "ParenthesizedExpression"
     children: None
 
 
-class ElseClause(TreeSitterNode):
+class ElseClause(AstNode):
     field_names = []
     children: "_statement"
 
 
-class EnumSpecifier(TreeSitterNode):
+class EnumSpecifier(AstNode):
     field_names = ["body", "name", "underlying_type"]
     body: Optional["EnumeratorList"]
     name: Optional["TypeIdentifier"]
@@ -340,24 +430,24 @@ class EnumSpecifier(TreeSitterNode):
     children: Optional["AttributeSpecifier"]
 
 
-class Enumerator(TreeSitterNode):
+class Enumerator(AstNode):
     field_names = ["name", "value"]
     name: "Identifier"
     value: Optional["_expression"]
     children: None
 
 
-class EnumeratorList(TreeSitterNode):
+class EnumeratorList(AstNode):
     field_names = []
     children: Optional[List["Enumerator"]]
 
 
-class ExpressionStatement(TreeSitterNode):
+class ExpressionStatement(AstNode):
     field_names = []
     children: Optional[Union["_expression", "CommaExpression"]]
 
 
-class FieldDeclaration(TreeSitterNode):
+class FieldDeclaration(AstNode):
     field_names = ["declarator", "type"]
     declarator: Optional[List["_fieldDeclarator"]]
     type: "_typeSpecifier"
@@ -375,7 +465,7 @@ class FieldDeclaration(TreeSitterNode):
     ]
 
 
-class FieldDeclarationList(TreeSitterNode):
+class FieldDeclarationList(AstNode):
     field_names = []
     children: Optional[
         List[
@@ -391,12 +481,12 @@ class FieldDeclarationList(TreeSitterNode):
     ]
 
 
-class FieldDesignator(TreeSitterNode):
+class FieldDesignator(AstNode):
     field_names = []
     children: "FieldIdentifier"
 
 
-class FieldExpression(TreeSitterNode):
+class FieldExpression(AstNode):
     field_names = ["argument", "field", "operator"]
     argument: "_expression"
     field: "FieldIdentifier"
@@ -404,7 +494,7 @@ class FieldExpression(TreeSitterNode):
     children: None
 
 
-class ForStatement(TreeSitterNode):
+class ForStatement(AstNode):
     field_names = ["body", "condition", "initializer", "update"]
     body: "_statement"
     condition: Optional[Union["_expression", "CommaExpression"]]
@@ -413,14 +503,14 @@ class ForStatement(TreeSitterNode):
     children: None
 
 
-class FunctionDeclarator(TreeSitterNode):
+class FunctionDeclarator(AstNode):
     field_names = ["declarator", "parameters"]
     declarator: Union["_declarator", "_fieldDeclarator", "_typeDeclarator"]
     parameters: "ParameterList"
     children: Optional[List[Union["AttributeSpecifier", "GnuAsmExpression"]]]
 
 
-class FunctionDefinition(TreeSitterNode):
+class FunctionDefinition(AstNode):
     field_names = ["body", "declarator", "type"]
     body: "CompoundStatement"
     declarator: "_declarator"
@@ -440,18 +530,18 @@ class FunctionDefinition(TreeSitterNode):
     ]
 
 
-class GenericExpression(TreeSitterNode):
+class GenericExpression(AstNode):
     field_names = []
     children: List[Union["_expression", "TypeDescriptor"]]
 
 
-class GnuAsmClobberList(TreeSitterNode):
+class GnuAsmClobberList(AstNode):
     field_names = ["register"]
     register: Optional[List["StringLiteral"]]
     children: None
 
 
-class GnuAsmExpression(TreeSitterNode):
+class GnuAsmExpression(AstNode):
     field_names = [
         "assembly_code",
         "clobbers",
@@ -467,13 +557,13 @@ class GnuAsmExpression(TreeSitterNode):
     children: Optional[List["GnuAsmQualifier"]]
 
 
-class GnuAsmGotoList(TreeSitterNode):
+class GnuAsmGotoList(AstNode):
     field_names = ["label"]
     label: Optional[List["Identifier"]]
     children: None
 
 
-class GnuAsmInputOperand(TreeSitterNode):
+class GnuAsmInputOperand(AstNode):
     field_names = ["constraint", "symbol", "value"]
     constraint: "StringLiteral"
     symbol: Optional["Identifier"]
@@ -481,13 +571,13 @@ class GnuAsmInputOperand(TreeSitterNode):
     children: None
 
 
-class GnuAsmInputOperandList(TreeSitterNode):
+class GnuAsmInputOperandList(AstNode):
     field_names = ["operand"]
     operand: Optional[List["GnuAsmInputOperand"]]
     children: None
 
 
-class GnuAsmOutputOperand(TreeSitterNode):
+class GnuAsmOutputOperand(AstNode):
     field_names = ["constraint", "symbol", "value"]
     constraint: "StringLiteral"
     symbol: Optional["Identifier"]
@@ -495,24 +585,24 @@ class GnuAsmOutputOperand(TreeSitterNode):
     children: None
 
 
-class GnuAsmOutputOperandList(TreeSitterNode):
+class GnuAsmOutputOperandList(AstNode):
     field_names = ["operand"]
     operand: Optional[List["GnuAsmOutputOperand"]]
     children: None
 
 
-class GnuAsmQualifier(TreeSitterNode):
+class GnuAsmQualifier(AstNode):
     field_names = []
     children: None
 
 
-class GotoStatement(TreeSitterNode):
+class GotoStatement(AstNode):
     field_names = ["label"]
     label: "StatementIdentifier"
     children: None
 
 
-class IfStatement(TreeSitterNode):
+class IfStatement(AstNode):
     field_names = ["alternative", "condition", "consequence"]
     alternative: Optional["ElseClause"]
     condition: "ParenthesizedExpression"
@@ -520,61 +610,61 @@ class IfStatement(TreeSitterNode):
     children: None
 
 
-class InitDeclarator(TreeSitterNode):
+class InitDeclarator(AstNode):
     field_names = ["declarator", "value"]
     declarator: "_declarator"
     value: Union["_expression", "InitializerList"]
     children: None
 
 
-class InitializerList(TreeSitterNode):
+class InitializerList(AstNode):
     field_names = []
     children: Optional[List[Union["_expression", "InitializerList", "InitializerPair"]]]
 
 
-class InitializerPair(TreeSitterNode):
+class InitializerPair(AstNode):
     field_names = ["designator", "value"]
     designator: List[Union["FieldDesignator", "SubscriptDesignator"]]
     value: Union["_expression", "InitializerList"]
     children: None
 
 
-class LabeledStatement(TreeSitterNode):
+class LabeledStatement(AstNode):
     field_names = ["label"]
     label: "StatementIdentifier"
     children: "_statement"
 
 
-class LinkageSpecification(TreeSitterNode):
+class LinkageSpecification(AstNode):
     field_names = ["body", "value"]
     body: Union["Declaration", "DeclarationList", "FunctionDefinition"]
     value: "StringLiteral"
     children: None
 
 
-class MacroTypeSpecifier(TreeSitterNode):
+class MacroTypeSpecifier(AstNode):
     field_names = ["name", "type"]
     name: "Identifier"
     type: "TypeDescriptor"
     children: None
 
 
-class MsBasedModifier(TreeSitterNode):
+class MsBasedModifier(AstNode):
     field_names = []
     children: "ArgumentList"
 
 
-class MsCallModifier(TreeSitterNode):
+class MsCallModifier(AstNode):
     field_names = []
     children: None
 
 
-class MsDeclspecModifier(TreeSitterNode):
+class MsDeclspecModifier(AstNode):
     field_names = []
     children: "Identifier"
 
 
-class MsPointerModifier(TreeSitterNode):
+class MsPointerModifier(AstNode):
     field_names = []
     children: Union[
         "MsRestrictModifier",
@@ -584,24 +674,24 @@ class MsPointerModifier(TreeSitterNode):
     ]
 
 
-class MsUnalignedPtrModifier(TreeSitterNode):
+class MsUnalignedPtrModifier(AstNode):
     field_names = []
     children: None
 
 
-class Null(TreeSitterNode):
+class Null(AstNode):
     field_names = []
     children: None
 
 
-class OffsetofExpression(TreeSitterNode):
+class OffsetofExpression(AstNode):
     field_names = ["member", "type"]
     member: "FieldIdentifier"
     type: "TypeDescriptor"
     children: None
 
 
-class ParameterDeclaration(TreeSitterNode):
+class ParameterDeclaration(AstNode):
     field_names = ["declarator", "type"]
     declarator: Optional[Union["_abstractDeclarator", "_declarator"]]
     type: "_typeSpecifier"
@@ -618,24 +708,24 @@ class ParameterDeclaration(TreeSitterNode):
     ]
 
 
-class ParameterList(TreeSitterNode):
+class ParameterList(AstNode):
     field_names = []
     children: Optional[
         List[Union["Identifier", "ParameterDeclaration", "VariadicParameter"]]
     ]
 
 
-class ParenthesizedDeclarator(TreeSitterNode):
+class ParenthesizedDeclarator(AstNode):
     field_names = []
     children: Union["_declarator", "_fieldDeclarator", "_typeDeclarator"]
 
 
-class ParenthesizedExpression(TreeSitterNode):
+class ParenthesizedExpression(AstNode):
     field_names = []
     children: Union["_expression", "CommaExpression", "PreprocDefined"]
 
 
-class PointerDeclarator(TreeSitterNode):
+class PointerDeclarator(AstNode):
     field_names = ["declarator"]
     declarator: Union["_declarator", "_fieldDeclarator", "_typeDeclarator"]
     children: Optional[
@@ -643,33 +733,33 @@ class PointerDeclarator(TreeSitterNode):
     ]
 
 
-class PointerExpression(TreeSitterNode):
+class PointerExpression(AstNode):
     field_names = ["argument", "operator"]
     argument: "_expression"
     operator: Union["str", "str"]
     children: None
 
 
-class PreprocCall(TreeSitterNode):
+class PreprocCall(AstNode):
     field_names = ["argument", "directive"]
     argument: Optional["PreprocArg"]
     directive: "PreprocDirective"
     children: None
 
 
-class PreprocDef(TreeSitterNode):
+class PreprocDef(AstNode):
     field_names = ["name", "value"]
     name: "Identifier"
     value: Optional["PreprocArg"]
     children: None
 
 
-class PreprocDefined(TreeSitterNode):
+class PreprocDefined(AstNode):
     field_names = []
     children: "Identifier"
 
 
-class PreprocElif(TreeSitterNode):
+class PreprocElif(AstNode):
     field_names = ["alternative", "condition"]
     alternative: Optional[Union["PreprocElif", "PreprocElse"]]
     condition: Union[
@@ -703,7 +793,7 @@ class PreprocElif(TreeSitterNode):
     ]
 
 
-class PreprocElifdef(TreeSitterNode):
+class PreprocElifdef(AstNode):
     field_names = ["alternative", "name"]
     alternative: Optional[Union["PreprocElif", "PreprocElse"]]
     name: "Identifier"
@@ -727,7 +817,7 @@ class PreprocElifdef(TreeSitterNode):
     ]
 
 
-class PreprocElse(TreeSitterNode):
+class PreprocElse(AstNode):
     field_names = []
     children: Optional[
         List[
@@ -750,7 +840,7 @@ class PreprocElse(TreeSitterNode):
     ]
 
 
-class PreprocFunctionDef(TreeSitterNode):
+class PreprocFunctionDef(AstNode):
     field_names = ["name", "parameters", "value"]
     name: "Identifier"
     parameters: "PreprocParams"
@@ -758,7 +848,7 @@ class PreprocFunctionDef(TreeSitterNode):
     children: None
 
 
-class PreprocIf(TreeSitterNode):
+class PreprocIf(AstNode):
     field_names = ["alternative", "condition"]
     alternative: Optional[Union["PreprocElif", "PreprocElse"]]
     condition: Union[
@@ -792,7 +882,7 @@ class PreprocIf(TreeSitterNode):
     ]
 
 
-class PreprocIfdef(TreeSitterNode):
+class PreprocIfdef(AstNode):
     field_names = ["alternative", "name"]
     alternative: Optional[Union["PreprocElif", "PreprocElifdef", "PreprocElse"]]
     name: "Identifier"
@@ -817,72 +907,72 @@ class PreprocIfdef(TreeSitterNode):
     ]
 
 
-class PreprocInclude(TreeSitterNode):
+class PreprocInclude(AstNode):
     field_names = ["path"]
     path: Union["CallExpression", "Identifier", "StringLiteral", "SystemLibString"]
     children: None
 
 
-class PreprocParams(TreeSitterNode):
+class PreprocParams(AstNode):
     field_names = []
     children: Optional[List["Identifier"]]
 
 
-class ReturnStatement(TreeSitterNode):
+class ReturnStatement(AstNode):
     field_names = []
     children: Optional[Union["_expression", "CommaExpression"]]
 
 
-class SizedTypeSpecifier(TreeSitterNode):
+class SizedTypeSpecifier(AstNode):
     field_names = ["type"]
     type: Optional[Union["PrimitiveType", "TypeIdentifier"]]
     children: None
 
 
-class SizeofExpression(TreeSitterNode):
+class SizeofExpression(AstNode):
     field_names = ["type", "value"]
     type: Optional["TypeDescriptor"]
     value: Optional["_expression"]
     children: None
 
 
-class StorageClassSpecifier(TreeSitterNode):
+class StorageClassSpecifier(AstNode):
     field_names = []
     children: None
 
 
-class StringLiteral(TreeSitterNode):
+class StringLiteral(AstNode):
     field_names = []
     children: Optional[List[Union["EscapeSequence", "StringContent"]]]
 
 
-class StructSpecifier(TreeSitterNode):
+class StructSpecifier(AstNode):
     field_names = ["body", "name"]
     body: Optional["FieldDeclarationList"]
     name: Optional["TypeIdentifier"]
     children: Optional[List[Union["AttributeSpecifier", "MsDeclspecModifier"]]]
 
 
-class SubscriptDesignator(TreeSitterNode):
+class SubscriptDesignator(AstNode):
     field_names = []
     children: "_expression"
 
 
-class SubscriptExpression(TreeSitterNode):
+class SubscriptExpression(AstNode):
     field_names = ["argument", "index"]
     argument: "_expression"
     index: "_expression"
     children: None
 
 
-class SwitchStatement(TreeSitterNode):
+class SwitchStatement(AstNode):
     field_names = ["body", "condition"]
     body: "CompoundStatement"
     condition: "ParenthesizedExpression"
     children: None
 
 
-class TranslationUnit(TreeSitterNode):
+class TranslationUnit(AstNode):
     field_names = []
     children: Optional[
         List[
@@ -917,150 +1007,173 @@ class TranslationUnit(TreeSitterNode):
     ]
 
 
-class TypeDefinition(TreeSitterNode):
+class TypeDefinition(AstNode):
     field_names = ["declarator", "type"]
     declarator: List["_typeDeclarator"]
     type: "_typeSpecifier"
     children: Optional[List[Union["AttributeSpecifier", "TypeQualifier"]]]
 
 
-class TypeDescriptor(TreeSitterNode):
+class TypeDescriptor(AstNode):
     field_names = ["declarator", "type"]
     declarator: Optional["_abstractDeclarator"]
     type: "_typeSpecifier"
     children: Optional[List["TypeQualifier"]]
 
 
-class TypeQualifier(TreeSitterNode):
+class TypeQualifier(AstNode):
     field_names = []
     children: None
 
 
-class UnaryExpression(TreeSitterNode):
+class UnaryExpression(AstNode):
     field_names = ["argument", "operator"]
     argument: Union["_expression", "PreprocDefined"]
     operator: Union["str", "str", "str", "str"]
     children: None
 
 
-class UnionSpecifier(TreeSitterNode):
+class UnionSpecifier(AstNode):
     field_names = ["body", "name"]
     body: Optional["FieldDeclarationList"]
     name: Optional["TypeIdentifier"]
     children: Optional[List[Union["AttributeSpecifier", "MsDeclspecModifier"]]]
 
 
-class UpdateExpression(TreeSitterNode):
+class UpdateExpression(AstNode):
     field_names = ["argument", "operator"]
     argument: "_expression"
     operator: Union["str", "str"]
     children: None
 
 
-class VariadicParameter(TreeSitterNode):
+class VariadicParameter(AstNode):
     field_names = []
     children: None
 
 
-class WhileStatement(TreeSitterNode):
+class WhileStatement(AstNode):
     field_names = ["body", "condition"]
     body: "_statement"
     condition: "ParenthesizedExpression"
     children: None
 
 
-class Character(TreeSitterNode):
+class Character(AstNode):
     field_names = []
     children: None
 
 
-class Comment(TreeSitterNode):
+class Comment(AstNode):
     field_names = []
     children: None
 
 
-class EscapeSequence(TreeSitterNode):
+class EscapeSequence(AstNode):
     field_names = []
     children: None
 
 
-class FalseBool(TreeSitterNode):
+class FalseBool(AstNode):
     field_names = []
     children: None
 
 
-class FieldIdentifier(TreeSitterNode):
+class FieldIdentifier(AstNode):
     field_names = []
     children: None
 
 
-class Identifier(TreeSitterNode):
+class Identifier(AstNode):
     field_names = []
     children: None
 
 
-class MsRestrictModifier(TreeSitterNode):
+class MsRestrictModifier(AstNode):
     field_names = []
     children: None
 
 
-class MsSignedPtrModifier(TreeSitterNode):
+class MsSignedPtrModifier(AstNode):
     field_names = []
     children: None
 
 
-class MsUnsignedPtrModifier(TreeSitterNode):
+class MsUnsignedPtrModifier(AstNode):
     field_names = []
     children: None
 
 
-class NumberLiteral(TreeSitterNode):
+class NumberLiteral(AstNode):
     field_names = []
     children: None
 
 
-class PreprocArg(TreeSitterNode):
+class PreprocArg(AstNode):
     field_names = []
     children: None
 
 
-class PreprocDirective(TreeSitterNode):
+class PreprocDirective(AstNode):
     field_names = []
     children: None
 
 
-class PrimitiveType(TreeSitterNode):
+class PrimitiveType(AstNode):
     field_names = []
     children: None
 
 
-class StatementIdentifier(TreeSitterNode):
+class StatementIdentifier(AstNode):
     field_names = []
     children: None
 
 
-class StringContent(TreeSitterNode):
+class StringContent(AstNode):
     field_names = []
     children: None
 
 
-class SystemLibString(TreeSitterNode):
+class SystemLibString(AstNode):
     field_names = []
     children: None
 
 
-class TrueBool(TreeSitterNode):
+class TrueBool(AstNode):
     field_names = []
     children: None
 
 
-class TypeIdentifier(TreeSitterNode):
+class TypeIdentifier(AstNode):
     field_names = []
     children: None
 
-class Operator(TreeSitterNode):
+
+class Operator(AstNode):
     field_names = []
     children: None
+
+
+class Unnamed(AstNode):
+    field_names = []
+    children: None
+
+
+class Whitespace(AstNode):
+    def __init__(self, text: str):
+        self.text = text
+        self.id = None
+        self.named_child_count = None
+        self.named_children = None
+        self.children_named_idxs = None
+        self.base_node = None
+        
+    def get_text(self) -> str:
+        return self.text
+
+    field_names = []
+    children: None
+
 
 type_name_to_class = {
     "+": Operator,

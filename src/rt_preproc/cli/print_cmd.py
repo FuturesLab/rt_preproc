@@ -1,8 +1,7 @@
 from cleo.commands.command import Command
 from cleo.helpers import argument
-from rt_preproc.parser.ast import TreeSitterNode
+from rt_preproc.parser.ast import AstNode
 from rt_preproc.parser.parser import Parser
-from rt_preproc.parser.utils import reify
 from rt_preproc.visitors.print import PrintCtx, PrintVisitor
 
 
@@ -22,7 +21,7 @@ class PrintCmd(Command):
             ds     = Parser()
             tree   = ds.parse(bytes)
             nodes  = ds.query(tree)
-            root_node: TreeSitterNode = reify(tree.root_node)
+            root_node = AstNode.reify(tree.root_node)
             visitor = PrintVisitor()
             root_node.accept(visitor, PrintCtx())
 
