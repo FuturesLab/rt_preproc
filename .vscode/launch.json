@@ -33,6 +33,21 @@
                 "graphviz",
                 "../tests/c/patchtests/macro_in_fn_no_vars/orig.c"
             ],
+        },
+        {
+            "name": "Python: run poetry patch",
+            "type": "python",
+            "request": "launch",
+            "cwd": "${workspaceFolder}/src",
+            "env": {
+                "PYTHONPATH" : "${workspaceFolder}/.venv/bin/python"
+            },
+            "module": "rt_preproc",
+            "justMyCode": true,
+            "args": [
+                "patch",
+                "../tests/c/patchtests/macro_in_fn_no_vars/orig.c"
+            ],
         }
     ]
 }

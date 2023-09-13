@@ -25,13 +25,13 @@ class AstNode(INode):
     This is only defined on leaf nodes.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, text: str = None) -> None:
         self.base_node = None
         self.parent = None
         self.children = []
         self.named_children = []
         self.children_named_idxs = []
-        self.text = None
+        self.text = text
 
     def accept(self, visitor: IVisitor, ctx: IVisitorCtx):
         return visitor.visit(self, ctx)
@@ -1161,10 +1161,10 @@ class Unnamed(AstNode):
 
 
 class Whitespace(AstNode):
-    def __init__(self, text: str):
-        super().__init__()
-        self.text = text
+    field_names = []
+    children: None
 
+class Custom(AstNode):
     field_names = []
     children: None
 

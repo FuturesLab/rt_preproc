@@ -7,7 +7,7 @@ readme = "README.md"
 packages = [{include = "rt_preproc", from = "src"}]
 
 [tool.poetry.dependencies]
-python = "^3.10"
+python = "^3.11"
 tree-sitter = "^0.20.1"
 cleo = "^2.0.1"
 multimethod = "^1.9.1"

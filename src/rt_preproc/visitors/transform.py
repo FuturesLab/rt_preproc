@@ -3,160 +3,97 @@ import rt_preproc.parser.ast as ast
 from typing import Optional
 from multimethod import multimethod
 from rt_preproc.visitors.base import IVisitor, IVisitorCtx
-from html import escape
-import copy
-from rt_preproc.parser.utils import *
+
 
 class TransformCtx(IVisitorCtx):
     def __init__(self, parent: Optional[ast.AstNode] = None) -> None:
         self.parent = parent
 
+
+class Macro:
+    def __init__(self, name: str, type: str):
+        self.name = name
+        self.type = type
+
+
 class TransformVisitor(IVisitor):
     """Visitor for performing variability transformations on AST nodes."""
 
     def __init__(self) -> None:
+        self.macros: list[Macro] = []
         self.buf = ""
         self.seen = []
 
-    def visit_children(
-        self, node: ast.AstNode, ctx: TransformCtx, label: str = None
-    ) -> list[Any]:
+    def build_setup_prelude(self) -> str:
+        buf = ""
+        # buf += "#include <stdio.h>      /* printf */\n"
+        buf += "#include <stdlib.h>     /* strtol */\n"
+        buf += "#include <assert.h>     /* assert */\n\n"
+        types = set(m.type for m in self.macros)
 
-        if hasattr(node, "children") and node.children is not None:
-            for child in node.children:
-                child.parent = node
-                if hasattr(child, "base_node"): 
-                    child.text = child.base_node.text
-                child.accept(self, TransformCtx(parent=node))    
-            return
-        return
+        # TODO: handle non-int data types
+        for t in types:
+            buf += f"#define UNDEFINED_{t.capitalize()} 0xdeadbeef\n"
+        for m in self.macros:
+            buf += f"{m.type} {m.name} = UNDEFINED_{t.capitalize()};\n"
+
+        buf += "\nint setup_env_vars() {\n"
+        for m in self.macros:
+            buf += f'  char* {m.name}_env_str = getenv("FOO");\n'
+            buf += f"  if ({m.name}_env_str)"
+            # TODO: handle non-int data types
+            buf += f" {m.name} = strtol({m.name}_env_str, NULL, 10);\n"
+
+        buf += "  return 0;\n"
+        buf += "}\n\n"
+
+        return buf
+
+    def visit_children(
+        self,
+        node: ast.AstNode,
+        ctx: TransformCtx,
+    ) -> list[Any]:
+        for i in range(len(node.children)):
+            val = node.children[i].accept(self, TransformCtx(parent=node))
+            if val is not None:
+                node.children[i] = val
 
     """Visitor functions below"""
 
     @multimethod
     def visit(self, node: ast.TranslationUnit, ctx: TransformCtx) -> Any:
         self.visit_children(node, ctx)
-
-    # Below is our two-pass handling of preprocessor blocks.
-    # First pass: identify any declarations and handle them first.
-    # Second pass: convert preproc blocks to conditional statements.
+        node.children.insert(0, ast.Custom(self.build_setup_prelude()))
 
     @visit.register
     def visit(self, node: ast.PreprocIfdef, ctx: TransformCtx) -> Any:
         self.visit_children(node, ctx)
-        move_decls(node)
-        rewrite_as_if(node)
+        identifier = node.named_children[0]
+        # expression = node.named_children[1]
+        self.macros.append(Macro(identifier.text, "int"))
+        
+        new_node = ast.IfStatement()
+        new_node.children = [
+            ast.Unnamed("if"),
+            ast.Whitespace(" "),
+            ast.Unnamed("("),
+            node.named_children[0],
+            ast.Unnamed(")"),
+            ast.Whitespace(" "),
+            ast.Unnamed("{"),
+            ast.Whitespace("\n"),
+            node.named_children[1],
+            ast.Whitespace("\n"),
+            ast.Unnamed("}"),
+            ast.Whitespace("\n"),
+        ]
+        new_node.named_children = node.named_children
+        return new_node
+        
+
 
     # General expressions...
-
     @visit.register
-    def visit(self, node: ast.ExpressionStatement, ctx: TransformCtx) -> Any:
-        self.visit_children(node, ctx)
-
-    @visit.register
-    def visit(self, node: ast.IfStatement, ctx: TransformCtx) -> Any:
-        self.visit_children(node, ctx)
-    
-    @visit.register
-    def visit(self, node: ast.ReturnStatement, ctx: TransformCtx) -> Any:
-        self.visit_children(node, ctx)
-
-    @visit.register
-    def visit(self, node: ast.CompoundStatement, ctx: TransformCtx) -> Any:
-        self.visit_children(node, ctx)
-
-    @visit.register
-    def visit(self, node: ast.AssignmentExpression, ctx: TransformCtx) -> Any:
-        self.visit_children(node, ctx)
-
-    # Function definitions / declarations...
-
-    @visit.register
-    def visit(self, node: ast.FunctionDefinition, ctx: TransformCtx) -> Any:       
-        self.visit_children(node, ctx)
-
-    @visit.register
-    def visit(self, node: ast.FunctionDeclarator, ctx: TransformCtx) -> Any: 
-        self.visit_children(node, ctx)
-
-    # Variable definitions / declarations...
-
-    @visit.register
-    def visit(self, node: ast.Declaration, ctx: TransformCtx) -> Any:        
-        self.visit_children(node, ctx)
-
-    @visit.register
-    def visit(self, node: ast.PreprocInclude, ctx: TransformCtx) -> Any:
-        self.visit_children(node, ctx)
-    
-    @visit.register
-    def visit(self, node: ast.SystemLibString, ctx: TransformCtx) -> Any:
-        self.visit_children(node, ctx)
-
-    # Arguments.
-
-    @visit.register
-    def visit(self, node: ast.ArgumentList, ctx: TransformCtx) -> Any:
-        self.visit_children(node, ctx)
-    
-    @visit.register
-    def visit(self, node: ast.ParameterList, ctx: TransformCtx) -> Any:
-        self.visit_children(node, ctx)
-
-    @visit.register
-    def visit(self, node: ast.ParameterDeclaration, ctx: TransformCtx) -> Any:
-        self.visit_children(node, ctx)
-    
-    @visit.register
-    def visit(self, node: ast.PointerDeclarator, ctx: TransformCtx) -> Any:
-        self.visit_children(node, ctx)
-
-    # Expressions.
-
-    @visit.register
-    def visit(self, node: ast.ParenthesizedExpression, ctx: TransformCtx) -> Any:
-        self.visit_children(node, ctx)
-    
-    @visit.register
-    def visit(self, node: ast.BinaryExpression, ctx: TransformCtx) -> Any:
-        self.visit_children(node, ctx)
-    
-    @visit.register
-    def visit(self, node: ast.CallExpression, ctx: TransformCtx) -> Any:    
-        self.visit_children(node, ctx)
-
-    @visit.register
-    def visit(self, node: ast.InitDeclarator, ctx: TransformCtx) -> Any:
-        self.visit_children(node, ctx)
-
-    # Types and literals.
-
-    @visit.register
-    def visit(self, node: ast.StringLiteral, ctx: TransformCtx) -> Any:
-        self.visit_children(node, ctx)    
-    
-    @visit.register
-    def visit(self, node: ast.NumberLiteral, ctx: TransformCtx) -> Any:
-        self.visit_children(node, ctx)
-
-    @visit.register
-    def visit(self, node: ast._expression, ctx: TransformCtx) -> Any:
-        self.visit_children(node, ctx)    
-
-    @visit.register
-    def visit(self, node: ast.PrimitiveType, ctx: TransformCtx) -> Any:
-        self.visit_children(node, ctx)
-
-    # Misc.
-
-    @visit.register
-    def visit(self, node: ast.Comment, ctx: TransformCtx) -> Any:
-        self.visit_children(node, ctx)  
-    
-    @visit.register
-    def visit(self, node: ast.Null, ctx: TransformCtx) -> Any:
-        self.visit_children(node, ctx)  
-    
-    @visit.register
-    def visit(self, node: ast.Identifier, ctx: TransformCtx) -> Any:
+    def visit(self, node: ast.AstNode, ctx: TransformCtx) -> Any:
         self.visit_children(node, ctx)
