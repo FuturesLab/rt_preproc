@@ -6,8 +6,11 @@ from rt_preproc.visitors.base import IVisitor, IVisitorCtx
 
 
 class TransformCtx(IVisitorCtx):
-    def __init__(self, parent: Optional[ast.AstNode] = None) -> None:
+    def __init__(
+        self, parent: Optional[ast.AstNode] = None, in_ifdef: bool = False
+    ) -> None:
         self.parent = parent
+        self.in_ifdef = in_ifdef
 
 
 class Macro:
@@ -55,21 +58,40 @@ class TransformVisitor(IVisitor):
         node: ast.AstNode,
         ctx: TransformCtx,
     ) -> list[Any]:
-        for i in range(len(node.children)):
-            val = node.children[i].accept(self, TransformCtx(parent=node))
-            if val is not None:
-                node.children[i] = val
+        move_up_all = []
+        i = 0
+        while i < len(node.children):
+            new_node, move_up = node.children[i].accept(
+                self,
+                TransformCtx(
+                    parent=node,
+                    in_ifdef=ctx.in_ifdef,
+                ),
+            )
+            if ctx.in_ifdef:
+                move_up_all.extend(move_up)
+            elif len(move_up) > 0:
+                # put all the move_ups here in node.children
+                node.children = node.children[:i] + move_up + node.children[i:]
+                i += len(move_up)
+            if new_node is not None:
+                node.children[i] = new_node
+            i += 1
+        return move_up_all
 
     """Visitor functions below"""
 
     @multimethod
     def visit(self, node: ast.TranslationUnit, ctx: TransformCtx) -> Any:
-        self.visit_children(node, ctx)
+        move_up = self.visit_children(node, ctx)
+        assert len(move_up) == 0
         node.children.insert(0, ast.Custom(self.build_setup_prelude()))
+        return node, []
 
     @visit.register
     def visit(self, node: ast.PreprocIfdef, ctx: TransformCtx) -> Any:
-        self.visit_children(node, ctx)
+        move_up = self.visit_children(node, TransformCtx(parent=node, in_ifdef=True))
+
         identifier = node.get_named_child(0)
         self.macros[identifier.text] = "int"
 
@@ -91,16 +113,48 @@ class TransformVisitor(IVisitor):
             ast.Whitespace("\n"),
         ]
         # TODO: update children_named_idxs
-        return new_node
+
+        return new_node, move_up
+
+    @visit.register
+    def visit(self, node: ast.Declaration, ctx: TransformCtx) -> Any:
+        move_up = self.visit_children(node, ctx)
+        if ctx.in_ifdef:
+            # move this declaration up to the parent,
+            #  but with UndefinedInt as the initializer
+            # and modify this to be an assignment
+            init_decl = node.get_named_child(1)
+
+            move_up_node = ast.Declaration()
+            move_up_node.children = [
+                node.get_named_child(0),
+                ast.Unnamed(" "),
+                init_decl.get_named_child(0),
+                ast.Unnamed(" = "),
+                ast.Identifier("UNDEFINED_Int"),  # TODO: handle other data types
+                ast.Unnamed(";"),
+                ast.Whitespace("\n"),
+            ]
+            move_up.append(move_up_node)
+            new_node = ast.AssignmentExpression()
+            new_node.children = [
+                init_decl.get_named_child(0),
+                ast.Unnamed("="),
+                init_decl.get_named_child(1),
+                ast.Unnamed(";"),
+                ast.Whitespace("\n"),
+            ]
+            return new_node, move_up
+        else:
+            return None, move_up
 
     @visit.register
     def visit(self, node: ast.FunctionDefinition, ctx: TransformCtx) -> Any:
-        self.visit_children(node, ctx)
+        move_up = self.visit_children(node, ctx)
 
         func_decl = node.get_named_child(1)
         func_name = func_decl.get_named_child(0).text
         if func_name == "main":
-            print("Hey! Found main!")
             setup_env_vars_run_str = r"""
   if (setup_env_vars() != 0) {
     printf("Error setting up environment variables\n");
@@ -115,9 +169,11 @@ class TransformVisitor(IVisitor):
             else:
                 raise Exception("No opening brace found in main function body")
             node.set_named_child(2, body)
-            return node
+            return node, move_up
+        return None, move_up
 
     # General expressions...
     @visit.register
     def visit(self, node: ast.AstNode, ctx: TransformCtx) -> Any:
-        self.visit_children(node, ctx)
+        move_up = self.visit_children(node, ctx)
+        return None, move_up

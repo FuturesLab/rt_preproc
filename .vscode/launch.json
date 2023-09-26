@@ -16,7 +16,8 @@
             "justMyCode": true,
             "args": [
                 "print",
-                "../tests/c/patchtests/macro_in_fn_no_vars/orig.c"
+                "../tests/c/patchtests/macro_in_fn_no_vars/orig.c",
+                "-v"
             ],
         },
         {
@@ -31,7 +32,8 @@
             "justMyCode": true,
             "args": [
                 "graphviz",
-                "../tests/c/patchtests/macro_in_fn_no_vars/orig.c"
+                "../tests/c/patchtests/macro_in_fn_no_vars/orig.c",
+                "-v"
             ],
         },
         {
@@ -46,7 +48,8 @@
             "justMyCode": true,
             "args": [
                 "patch",
-                "../tests/c/patchtests/macro_in_fn_no_vars/orig.c"
+                "../tests/c/patchtests/macro_in_fn_vars/orig.c",
+                "-v"
             ],
         }
     ]
