@@ -43,7 +43,7 @@ class TransformVisitor(IVisitor):
 
         buf += "\nint setup_env_vars() {\n"
         for m_name in self.macros:
-            buf += f'  char* {m_name}_env_str = getenv("FOO");\n'
+            buf += f'  char* {m_name}_env_str = getenv("{m_name}");\n'
             buf += f"  if ({m_name}_env_str)"
             # TODO: handle non-int data types
             buf += f" {m_name} = strtol({m_name}_env_str, NULL, 10);\n"
