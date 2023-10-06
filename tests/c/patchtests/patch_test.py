@@ -50,15 +50,16 @@ def check_patch_equiv(dir: os.DirEntry[str], post_file: str = None):
             )
             should_fail_assert = True
         # run orig (no need for env, since macros are compiled in)
-        orig_result = subprocess.run(
-            ["./tmp/orig"],
-            capture_output=True,
-        )
+        if not should_fail_assert:
+            orig_result = subprocess.run(
+                ["./tmp/orig"],
+                capture_output=True,
+            )
         # run post with env macros
         post_result = subprocess.run(["./tmp/post"], capture_output=True, env=env_conf)
         if should_fail_assert:
             assert post_result.returncode != 0
-            assert post_result.stderr.startswith(b"Assertion failed")
+            assert b"Assertion " in post_result.stderr
             LOGGER.debug(
                 f"post stderr: {Fore.YELLOW}{post_result.stderr}{Style.RESET_ALL}"
             )

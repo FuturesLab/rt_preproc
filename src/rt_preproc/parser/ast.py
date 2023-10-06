@@ -24,7 +24,7 @@ class AstNode(INode):
     This is only defined on leaf nodes.
     """
 
-    def __init__(self, text: str = None) -> None:
+    def __init__(self, text: Optional[str] = None) -> None:
         self.base_node = None
         self.parent = None
         self.children = []

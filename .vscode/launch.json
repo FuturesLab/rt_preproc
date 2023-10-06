@@ -48,7 +48,7 @@
             "justMyCode": true,
             "args": [
                 "patch",
-                "../tests/c/patchtests/macro_in_fn_vars_nested/orig.c",
+                "../tests/c/patchtests/macro_sur_fn_no_alt/orig.c",
                 "-v"
             ],
         }

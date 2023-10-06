@@ -1,16 +1,7 @@
-from typing import Any
 import rt_preproc.parser.ast as ast
-from typing import Optional
+from typing import Optional, List, Any, Self
 from multimethod import multimethod
 from rt_preproc.visitors.base import IVisitor, IVisitorCtx
-
-
-class TransformCtx(IVisitorCtx):
-    def __init__(
-        self, parent: Optional[ast.AstNode] = None, in_ifdef: bool = False
-    ) -> None:
-        self.parent = parent
-        self.in_ifdef = in_ifdef
 
 
 class Macro:
@@ -18,14 +9,36 @@ class Macro:
         self.name = name
         self.type = type
 
+class TransformCtx(IVisitorCtx):
+    def __init__(
+        self,
+        parent_ctx: Optional[Self] = None,
+        parent: Optional[ast.AstNode] = None,
+        in_ifdef: bool = False,
+        ifdef_cond: Optional[Macro] = None,
+    ) -> None:
+        self.parent_ctx = parent_ctx
+        self.parent = parent
+        self.in_ifdef = in_ifdef or (parent_ctx is not None and parent_ctx.in_ifdef)
+        self.ifdef_cond = ifdef_cond
+
+    def get_ifdef_cond_stack(self) -> List[Macro]:
+        stack = []
+        ctx = self
+        while ctx is not None:
+            if ctx.ifdef_cond is not None:
+                stack.append(ctx.ifdef_cond)
+            ctx = ctx.parent_ctx
+        return stack
+
+
+
 
 class TransformVisitor(IVisitor):
     """Visitor for performing variability transformations on AST nodes."""
 
     def __init__(self) -> None:
         self.macros: dict[str, str] = {}
-        self.buf = ""
-        self.seen = []
 
     def build_setup_prelude(self) -> str:
         buf = ""
@@ -60,13 +73,11 @@ class TransformVisitor(IVisitor):
     ) -> list[Any]:
         move_up_all = []
         i = 0
+
         while i < len(node.children):
             new_node, move_up = node.children[i].accept(
                 self,
-                TransformCtx(
-                    parent=node,
-                    in_ifdef=ctx.in_ifdef,
-                ),
+                ctx,
             )
             if ctx.in_ifdef:
                 move_up_all.extend(move_up)
@@ -89,11 +100,24 @@ class TransformVisitor(IVisitor):
         return node, []
 
     @visit.register
-    def visit(self, node: ast.PreprocIfdef, ctx: TransformCtx) -> Any:
-        move_up = self.visit_children(node, TransformCtx(parent=node, in_ifdef=True))
+    def _(self, node: ast.PreprocIfdef, ctx: TransformCtx) -> Any:
+        move_up = self.visit_children(
+            node,
+            TransformCtx(
+                parent=node, 
+                in_ifdef=True, 
+                parent_ctx=ctx, 
+                ifdef_cond=Macro(node.get_named_child(0).text, "int")
+            ),
+        )
 
         identifier = node.get_named_child(0)
         self.macros[identifier.text] = "int"
+
+        body_children = node.get_named_child(1).children
+        # if the body is empty or all children are whitespace, then we can omit the ifdef
+        if len(body_children) == 0 or all(isinstance(c, ast.Whitespace) for c in body_children):
+            return ast.Custom("\n"), move_up
 
         new_node = ast.IfStatement()
         new_node.children = [
@@ -113,11 +137,10 @@ class TransformVisitor(IVisitor):
             ast.Whitespace("\n"),
         ]
         # TODO: update children_named_idxs
-
         return new_node, move_up
 
     @visit.register
-    def visit(self, node: ast.Declaration, ctx: TransformCtx) -> Any:
+    def _(self, node: ast.Declaration, ctx: TransformCtx) -> Any:
         move_up = self.visit_children(node, ctx)
         if ctx.in_ifdef:
             # move this declaration up to the parent,
@@ -149,7 +172,7 @@ class TransformVisitor(IVisitor):
             return None, move_up
 
     @visit.register
-    def visit(self, node: ast.FunctionDefinition, ctx: TransformCtx) -> Any:
+    def _(self, node: ast.FunctionDefinition, ctx: TransformCtx) -> Any:
         move_up = self.visit_children(node, ctx)
 
         func_decl = node.get_named_child(1)
@@ -170,10 +193,27 @@ class TransformVisitor(IVisitor):
                 raise Exception("No opening brace found in main function body")
             node.set_named_child(2, body)
             return node, move_up
+        else:
+            # if in ifdef block, move this function definition up to the parent
+            if ctx.in_ifdef:
+                # TODO: add an assertion to the body that the ifdef condition is true
+                body = node.get_named_child(2)
+                for i in range(len(body.children)):
+                    if body.children[i].text == "{":
+                        for cond_macro in ctx.get_ifdef_cond_stack():
+                            body.children.insert(i + 1, 
+                                ast.Custom(f"\nassert({cond_macro.name} != UNDEFINED_{cond_macro.type.capitalize()});\n"))
+                        break
+                else:
+                    raise Exception("No opening brace found for function body")
+                node.set_named_child(2, body)
+                move_up.append(node)
+                return ast.Whitespace("\n"), move_up
+
         return None, move_up
 
     # General expressions...
     @visit.register
-    def visit(self, node: ast.AstNode, ctx: TransformCtx) -> Any:
+    def _(self, node: ast.AstNode, ctx: TransformCtx) -> Any:
         move_up = self.visit_children(node, ctx)
         return None, move_up
