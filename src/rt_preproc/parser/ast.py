@@ -31,6 +31,12 @@ class AstNode(INode):
         self.children_named_idxs = []
         self.text = text
 
+    def get_child_by_name(self, name: str) -> Optional[Self]:
+        """
+        Get a child by name.
+        """
+        return self.base_node.child_by_field_name(name) if self.base_node is not None else None
+
     def get_named_child(self, named_index: int) -> Optional[Self]:
         """
         Get a named child by index.
