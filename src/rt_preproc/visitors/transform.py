@@ -95,8 +95,13 @@ class TransformVisitor(IVisitor):
                 node.children = node.children[:i] + move_up + node.children[i:]
                 i += len(move_up)
             # a bit hacky, delete the semicolon after a call expression converted to a if chain
-            if isinstance(node.children[i], ast.CallExpression) and not isinstance(new_node, ast.CallExpression):
-                node.children[i+1] = ast.Whitespace(" ")
+            if isinstance(node.children[i], ast.CallExpression) and not isinstance(
+                new_node, ast.CallExpression
+            ):
+                for j in range(i + 1, len(node.children)):
+                    if node.children[j].text == ";":
+                        node.children[j] = ast.Whitespace(" ")
+                        break
             if new_node is not None:
                 node.children[i] = new_node
             i += 1
@@ -118,8 +123,10 @@ class TransformVisitor(IVisitor):
             TransformCtx(
                 parent=node,
                 in_ifdef=True,
-                parent_ctx=ctx.parent_ctx, # we skip the ctx of the ifdef to act like preproc else is on the same syntax level as the ifdef
-                ifdef_cond=Macro(ctx.ifdef_cond.name, ctx.ifdef_cond.type, def_cond=True),
+                parent_ctx=ctx.parent_ctx,  # we skip the ctx of the ifdef to act like preproc else is on the same syntax level as the ifdef
+                ifdef_cond=Macro(
+                    ctx.ifdef_cond.name, ctx.ifdef_cond.type, def_cond=True
+                ),
             ),
         )
         return node, move_up
@@ -190,26 +197,34 @@ class TransformVisitor(IVisitor):
             #  but with UndefinedInt as the initializer
             # and modify this to be an assignment
             init_decl = node.get_named_child(1)
+            name_node = None
+            is_id = isinstance(init_decl, ast.Identifier)
+            if is_id:
+                name_node = init_decl
+            else:
+                name_node = init_decl.get_named_child(0)
 
             move_up_node = ast.Declaration()
             move_up_node.children = [
                 node.get_named_child(0),
                 ast.Unnamed(" "),
-                init_decl.get_named_child(0),
+                name_node,
                 ast.Unnamed(" = "),
                 ast.Identifier("UNDEFINED_Int"),  # TODO: handle other data types
                 ast.Unnamed(";"),
                 ast.Whitespace("\n"),
             ]
             move_up.append(move_up_node)
-            new_node = ast.AssignmentExpression()
-            new_node.children = [
-                init_decl.get_named_child(0),
-                ast.Unnamed("="),
-                init_decl.get_named_child(1),
-                ast.Unnamed(";"),
-                ast.Whitespace("\n"),
-            ]
+            new_node = None
+            if not is_id:
+                new_node = ast.AssignmentExpression()
+                new_node.children = [
+                    name_node,
+                    ast.Unnamed("="),
+                    init_decl.get_named_child(1),
+                    ast.Unnamed(";"),
+                    ast.Whitespace("\n"),
+                ]
             return new_node, move_up
         else:
             return None, move_up
@@ -304,11 +319,12 @@ class TransformVisitor(IVisitor):
                     )
                 if_statement.children.append(ast.TrueBool("1"))
                 new_node = node
-                if i > 0: # if not the first function decl, we need to change the function name
+                # if not the first function decl, we need to change the function name
+                if i > 0:
                     new_node = ast.CallExpression()
                     new_node.children = [
-                        ast.Identifier(node.get_named_child(0).text + "_" + str(i+1)),
-                        node.get_named_child(1)
+                        ast.Identifier(node.get_named_child(0).text + "_" + str(i + 1)),
+                        node.get_named_child(1),
                     ]
                 if_statement.children.extend(
                     [

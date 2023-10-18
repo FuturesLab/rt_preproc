@@ -48,8 +48,8 @@
             "justMyCode": true,
             "args": [
                 "patch",
-                "../tests/c/patchtests/macro_in_fn_no_vars/orig.c",
-                "-v"
+                "../tests/c/patchtests/macro_sur_var_dif_type/orig.c",
+                "-vv"
             ],
         }
     ]
