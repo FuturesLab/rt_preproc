@@ -5,6 +5,15 @@ from rt_preproc.visitors.base import IVisitor, IVisitorCtx
 from collections import defaultdict
 
 
+class MoveUpMsg:
+    def __init__(
+        self, node: Optional[ast.AstNode] = None, move_up_nodes: List[ast.AstNode] = []
+    ) -> None:
+        self.node = node
+        self.move_up = []
+        self.move_up.extend(move_up_nodes)
+
+
 class Macro:
     def __init__(self, name: str, type: str, def_cond: bool = False):
         self.name = name
@@ -79,17 +88,16 @@ class TransformVisitor(IVisitor):
         self,
         node: ast.AstNode,
         ctx: TransformCtx,
-    ) -> list[Any]:
-        move_up_all = []
+    ) -> MoveUpMsg:
+        move_up_all = MoveUpMsg()
         i = 0
 
         while i < len(node.children):
-            new_node, move_up = node.children[i].accept(
-                self,
-                ctx,
-            )
+            up_msg = node.children[i].accept(self, ctx)
+            move_up = up_msg.move_up
+            new_node = up_msg.node
             if ctx.in_ifdef:
-                move_up_all.extend(move_up)
+                move_up_all.move_up.extend(move_up)
             elif len(move_up) > 0:
                 # put all the move_ups here in node.children
                 node.children = node.children[:i] + move_up + node.children[i:]
@@ -110,15 +118,15 @@ class TransformVisitor(IVisitor):
     """Visitor functions below"""
 
     @multimethod
-    def visit(self, node: ast.TranslationUnit, ctx: TransformCtx) -> Any:
-        move_up = self.visit_children(node, ctx)
-        assert len(move_up) == 0
+    def visit(self, node: ast.TranslationUnit, ctx: TransformCtx) -> MoveUpMsg:
+        up_msg = self.visit_children(node, ctx)
+        assert len(up_msg.move_up) == 0
         node.children.insert(0, ast.Custom(self.build_setup_prelude()))
-        return node, []
+        return MoveUpMsg(node, up_msg.move_up)
 
     @visit.register
-    def _(self, node: ast.PreprocElse, ctx: TransformCtx) -> Any:
-        move_up = self.visit_children(
+    def _(self, node: ast.PreprocElse, ctx: TransformCtx) -> MoveUpMsg:
+        up_msg = self.visit_children(
             node,
             TransformCtx(
                 parent=node,
@@ -129,11 +137,11 @@ class TransformVisitor(IVisitor):
                 ),
             ),
         )
-        return node, move_up
+        return MoveUpMsg(node, up_msg.move_up)
 
     @visit.register
-    def _(self, node: ast.PreprocIfdef, ctx: TransformCtx) -> Any:
-        move_up = self.visit_children(
+    def _(self, node: ast.PreprocIfdef, ctx: TransformCtx) -> MoveUpMsg:
+        up_msg = self.visit_children(
             node,
             TransformCtx(
                 parent=node,
@@ -151,7 +159,7 @@ class TransformVisitor(IVisitor):
         if len(body_children) == 0 or all(
             isinstance(c, ast.Whitespace) for c in body_children
         ):
-            return ast.Custom("\n"), move_up
+            return MoveUpMsg(ast.Custom("\n"), up_msg.move_up)
 
         new_node = ast.IfStatement()
         new_node.children = [
@@ -187,11 +195,11 @@ class TransformVisitor(IVisitor):
                     ]
                 )
         # TODO: update children_named_idxs
-        return new_node, move_up
+        return MoveUpMsg(new_node, up_msg.move_up)
 
     @visit.register
-    def _(self, node: ast.Declaration, ctx: TransformCtx) -> Any:
-        move_up = self.visit_children(node, ctx)
+    def _(self, node: ast.Declaration, ctx: TransformCtx) -> MoveUpMsg:
+        up_msg = self.visit_children(node, ctx)
         if ctx.in_ifdef:
             # move this declaration up to the parent,
             #  but with UndefinedInt as the initializer
@@ -214,7 +222,7 @@ class TransformVisitor(IVisitor):
                 ast.Unnamed(";"),
                 ast.Whitespace("\n"),
             ]
-            move_up.append(move_up_node)
+            up_msg.move_up.append(move_up_node)
             new_node = None
             if not is_id:
                 new_node = ast.AssignmentExpression()
@@ -225,13 +233,13 @@ class TransformVisitor(IVisitor):
                     ast.Unnamed(";"),
                     ast.Whitespace("\n"),
                 ]
-            return new_node, move_up
+            return MoveUpMsg(new_node, up_msg.move_up)
         else:
-            return None, move_up
+            return MoveUpMsg(None, up_msg.move_up)
 
     @visit.register
-    def _(self, node: ast.FunctionDefinition, ctx: TransformCtx) -> Any:
-        move_up = self.visit_children(node, ctx)
+    def _(self, node: ast.FunctionDefinition, ctx: TransformCtx) -> MoveUpMsg:
+        up_msg = self.visit_children(node, ctx)
 
         func_decl = node.get_named_child(1)
         func_name = func_decl.get_named_child(0).text
@@ -259,7 +267,7 @@ class TransformVisitor(IVisitor):
             else:
                 raise Exception("No opening brace found in main function body")
             node.set_named_child(2, body)
-            return node, move_up
+            return MoveUpMsg(node, up_msg.move_up)
         else:
             # if in ifdef block, move this function definition up to the parent
             if ctx.in_ifdef:
@@ -279,14 +287,14 @@ class TransformVisitor(IVisitor):
                     raise Exception("No opening brace found for function body")
                 body.children.append(ast.Whitespace("\n"))
                 node.set_named_child(2, body)
-                move_up.append(node)
-                return ast.Whitespace("\n"), move_up
+                up_msg.move_up.append(node)
+                return MoveUpMsg(ast.Whitespace("\n"), up_msg.move_up)
 
-        return None, move_up
+        return MoveUpMsg(None, up_msg.move_up)
 
     @visit.register
-    def _(self, node: ast.CallExpression, ctx: TransformCtx) -> Any:
-        move_up = self.visit_children(node, ctx)
+    def _(self, node: ast.CallExpression, ctx: TransformCtx) -> MoveUpMsg:
+        up_msg = self.visit_children(node, ctx)
         fn_name = node.get_named_child(0).text
         if len(self.fn_decls[fn_name]) > 1:
             compound_stmt = ast.CompoundStatement()
@@ -339,12 +347,12 @@ class TransformVisitor(IVisitor):
                     ]
                 )
                 compound_stmt.children.append(if_statement)
-            return compound_stmt, move_up
+            return MoveUpMsg(compound_stmt, up_msg.move_up)
         else:
-            return node, move_up
+            return MoveUpMsg(node, up_msg.move_up)
 
     # General expressions...
     @visit.register
-    def _(self, node: ast.AstNode, ctx: TransformCtx) -> Any:
-        move_up = self.visit_children(node, ctx)
-        return None, move_up
+    def _(self, node: ast.AstNode, ctx: TransformCtx) -> MoveUpMsg:
+        up_msg = self.visit_children(node, ctx)
+        return MoveUpMsg(None, up_msg.move_up)
