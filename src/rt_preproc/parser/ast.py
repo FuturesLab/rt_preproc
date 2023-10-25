@@ -13,7 +13,6 @@ class AstNode(INode):
     parent: Optional[Self]
     field_names: List[str]
     children: List[Self]
-    named_children: List[Self]
     children_named_idxs: List[Optional[int]]
     """
     This is a list the same length as children, where each element
@@ -25,13 +24,30 @@ class AstNode(INode):
     This is only defined on leaf nodes.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, text: Optional[str] = None) -> None:
         self.base_node = None
         self.parent = None
         self.children = []
-        self.named_children = []
         self.children_named_idxs = []
-        self.text = None
+        self.text = text
+
+    def get_child_by_name(self, name: str) -> Optional[Self]:
+        """
+        Get a child by name.
+        """
+        return self.base_node.child_by_field_name(name) if self.base_node is not None else None
+
+    def get_named_child(self, named_index: int) -> Optional[Self]:
+        """
+        Get a named child by index.
+        """
+        return self.children[self.children_named_idxs.index(named_index)]
+
+    def set_named_child(self, named_index: int, child: Self) -> None:
+        """
+        Set a named child by index.
+        """
+        self.children[self.children_named_idxs.index(named_index)] = child
 
     def accept(self, visitor: IVisitor, ctx: IVisitorCtx):
         return visitor.visit(self, ctx)
@@ -49,7 +65,6 @@ class AstNode(INode):
         )
         ast_node.base_node = base_node
         # TODO: don't duplicate the work, use the children_named_idxs list
-        ast_node.named_children = [AstNode.reify(x) for x in base_node.named_children]
 
         for i, child in enumerate(base_node.children):
             if include_whitespace and i > 0:
@@ -1161,10 +1176,11 @@ class Unnamed(AstNode):
 
 
 class Whitespace(AstNode):
-    def __init__(self, text: str):
-        super().__init__()
-        self.text = text
+    field_names = []
+    children: None
 
+
+class Custom(AstNode):
     field_names = []
     children: None
 

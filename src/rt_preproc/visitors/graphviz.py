@@ -51,7 +51,8 @@ class GraphVizVisitor(IVisitor):
         self.buf += 'subgraph "cluster_' + stringize_node(node) + '" {\n'
         out = [
             child.accept(self, GraphVizCtx(parent=node))
-            for child in node.named_children
+            for child, idx in zip(node.children, node.children_named_idxs)
+            if idx is not None
         ]
         self.buf += "}\n"
         return out

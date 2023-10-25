@@ -16,7 +16,8 @@
             "justMyCode": true,
             "args": [
                 "print",
-                "../tests/c/patchtests/macro_in_fn_no_vars/orig.c"
+                "../tests/c/patchtests/macro_in_fn_no_vars/orig.c",
+                "-v"
             ],
         },
         {
@@ -31,7 +32,24 @@
             "justMyCode": true,
             "args": [
                 "graphviz",
-                "../tests/c/patchtests/macro_in_fn_no_vars/orig.c"
+                "../tests/c/patchtests/macro_sur_var_dif_type/orig.c",
+                "-v"
+            ],
+        },
+        {
+            "name": "Python: run poetry patch",
+            "type": "python",
+            "request": "launch",
+            "cwd": "${workspaceFolder}/src",
+            "env": {
+                "PYTHONPATH" : "${workspaceFolder}/.venv/bin/python"
+            },
+            "module": "rt_preproc",
+            "justMyCode": true,
+            "args": [
+                "patch",
+                "../tests/c/patchtests/macro_sur_var_dif_type/orig.c",
+                "-vv"
             ],
         }
     ]

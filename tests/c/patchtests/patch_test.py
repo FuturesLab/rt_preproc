@@ -4,26 +4,15 @@ import subprocess
 import json
 import itertools
 import logging
-from colorama import Fore, Back, Style
+from colorama import Fore, Style
 
 LOGGER = logging.getLogger(__name__)
 
 
-@pytest.mark.parametrize(
-    "dir",
-    [
-        pytest.param(it, id=it.name)
-        for it in os.scandir("tests/c/patchtests")
-        if it.is_dir() and not it.name.startswith(("_", "."))
-    ],
-)
-def test_c_func_equivalence(dir: os.DirEntry[str]):
-    # make tmp dir
-    if not os.path.exists("tmp"):
-        os.mkdir("tmp")
+def check_patch_equiv(dir: os.DirEntry[str], post_file: str = None):
     c_compiler = os.getenv("CC", "clang")
     orig_path = os.path.join(dir.path, "orig.c")
-    post_path = os.path.join(dir.path, "post.c")
+    post_path = os.path.join(dir.path, "post.c") if post_file is None else post_file
     conf_path = os.path.join(dir.path, "conf.json")
     # compile post.c once WITHOUT env macros defined
     LOGGER.info("compiling post.c")
@@ -51,7 +40,8 @@ def test_c_func_equivalence(dir: os.DirEntry[str]):
             "tmp/orig",
         ]
         LOGGER.info(
-            f"compiling orig.c: {Fore.LIGHTBLACK_EX}{' '.join(comp_args)}{Style.RESET_ALL}"
+            f"compiling orig.c: {Fore.LIGHTBLACK_EX}"
+            + f"{' '.join(comp_args)}{Style.RESET_ALL}"
         )
         should_fail_assert = False
         if subprocess.run(comp_args).returncode != 0:
@@ -60,15 +50,16 @@ def test_c_func_equivalence(dir: os.DirEntry[str]):
             )
             should_fail_assert = True
         # run orig (no need for env, since macros are compiled in)
-        orig_result = subprocess.run(
-            ["./tmp/orig"],
-            capture_output=True,
-        )
+        if not should_fail_assert:
+            orig_result = subprocess.run(
+                ["./tmp/orig"],
+                capture_output=True,
+            )
         # run post with env macros
         post_result = subprocess.run(["./tmp/post"], capture_output=True, env=env_conf)
         if should_fail_assert:
             assert post_result.returncode != 0
-            assert post_result.stderr.startswith(b"Assertion failed")
+            assert b"Assertion " in post_result.stderr
             LOGGER.debug(
                 f"post stderr: {Fore.YELLOW}{post_result.stderr}{Style.RESET_ALL}"
             )
@@ -77,3 +68,32 @@ def test_c_func_equivalence(dir: os.DirEntry[str]):
         LOGGER.debug(f"post out: {Fore.CYAN}{post_result.stdout}{Style.RESET_ALL}")
         assert orig_result.stdout == post_result.stdout
         assert orig_result.returncode == post_result.returncode
+
+
+@pytest.mark.parametrize(
+    "dir",
+    [
+        pytest.param(it, id=it.name)
+        for it in os.scandir("tests/c/patchtests")
+        if it.is_dir() and not it.name.startswith(("_", "."))
+    ],
+)
+def test_c_func_equivalence_patch(dir: os.DirEntry[str]):
+    if not os.path.exists("tmp"):
+        os.mkdir("tmp")
+    subprocess.run(
+        ["rt_preproc", "patch", "-o", "./tmp/out.c", os.path.join(dir.path, "orig.c")]
+    ).check_returncode()
+    check_patch_equiv(dir, post_file="./tmp/out.c")
+
+
+# @pytest.mark.parametrize(
+#     "dir",
+#     [
+#         pytest.param(it, id=it.name)
+#         for it in os.scandir("tests/c/patchtests")
+#         if it.is_dir() and not it.name.startswith(("_", "."))
+#     ],
+# )
+# def test_c_func_equivalence_premade(dir: os.DirEntry[str]):
+#     check_patch_equiv(dir)
