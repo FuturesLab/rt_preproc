@@ -1,9 +1,9 @@
 #include <stdio.h>      /* printf */
 
 #ifdef FOO
-  int x;
+  int x = 2;
 #else 
-  char x;
+  char x = 'a';
 #endif
 
 #ifdef FOO
@@ -18,8 +18,8 @@
  
 int main(){
   #ifdef FOO
-    printf("%d", func(3));
+    printf("%d", func(x));
   #else
-    printf("%c", func(3));
+    printf("%c", func(x));
   #endif
 }

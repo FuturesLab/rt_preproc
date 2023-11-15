@@ -3,15 +3,7 @@ from typing import Optional, List, Any, Self
 from multimethod import multimethod
 from rt_preproc.visitors.base import IVisitor, IVisitorCtx
 from collections import defaultdict
-
-
-class MoveUpMsg:
-    def __init__(
-        self, node: Optional[ast.AstNode] = None, move_up_nodes: List[ast.AstNode] = []
-    ) -> None:
-        self.node = node
-        self.move_up = []
-        self.move_up.extend(move_up_nodes)
+import copy
 
 
 class Macro:
@@ -27,6 +19,25 @@ class FuncDecl:
         self.macro_set = macro_set
 
 
+class VarDecl:
+    def __init__(self, var_decl: ast.Declaration, macro_set: set[Macro]):
+        self.var_decl = var_decl
+        self.macro_set = macro_set
+
+
+class MoveUpMsg:
+    def __init__(
+        self,
+        node: Optional[ast.AstNode] = None,
+        move_up_nodes: List[ast.AstNode] = [],
+        var_decls_up: dict[str, list[VarDecl]] = defaultdict(list),
+    ) -> None:
+        self.node = node
+        self.move_up = []
+        self.var_decls_up = var_decls_up
+        self.move_up.extend(move_up_nodes)
+
+
 class TransformCtx(IVisitorCtx):
     def __init__(
         self,
@@ -39,6 +50,7 @@ class TransformCtx(IVisitorCtx):
         self.parent = parent
         self.in_ifdef = in_ifdef or (parent_ctx is not None and parent_ctx.in_ifdef)
         self.ifdef_cond = ifdef_cond
+        self.var_decls: dict[str, list[VarDecl]] = defaultdict(list)
 
     def get_ifdef_cond_stack(self) -> List[Macro]:
         stack = []
@@ -49,6 +61,14 @@ class TransformCtx(IVisitorCtx):
             ctx = ctx.parent_ctx
         return stack
 
+    def clone(self, parent: ast.AstNode) -> Self:
+        return TransformCtx(
+            parent_ctx=self.parent_ctx,
+            parent=parent,
+            in_ifdef=self.in_ifdef,  # readonly
+            ifdef_cond=copy.deepcopy(self.ifdef_cond),
+        )
+
 
 class TransformVisitor(IVisitor):
     """Visitor for performing variability transformations on AST nodes."""
@@ -57,6 +77,7 @@ class TransformVisitor(IVisitor):
         self.macros: dict[str, str] = {}
         self.structs: dict[str, ast.StructSpecifier] = {}
         self.fn_decls: dict[str, list[FuncDecl]] = defaultdict(list)
+        self.move_to_mains: List[ast.AstNode] = []
 
     def build_setup_prelude(self) -> str:
         buf = ""
@@ -93,7 +114,7 @@ class TransformVisitor(IVisitor):
         i = 0
 
         while i < len(node.children):
-            up_msg = node.children[i].accept(self, ctx)
+            up_msg = node.children[i].accept(self, ctx.clone(node))
             move_up = up_msg.move_up
             new_node = up_msg.node
             if ctx.in_ifdef:
@@ -133,7 +154,9 @@ class TransformVisitor(IVisitor):
                 in_ifdef=True,
                 parent_ctx=ctx.parent_ctx,  # we skip the ctx of the ifdef to act like preproc else is on the same syntax level as the ifdef
                 ifdef_cond=Macro(
-                    ctx.ifdef_cond.name, ctx.ifdef_cond.type, def_cond=True
+                    ctx.ifdef_cond.name,
+                    ctx.ifdef_cond.type,
+                    def_cond=True,
                 ),
             ),
         )
@@ -194,6 +217,10 @@ class TransformVisitor(IVisitor):
                         ast.Whitespace("\n"),
                     ]
                 )
+        if isinstance(ctx.parent, ast.TranslationUnit):
+            # if this is a top level ifdef, we need to move it to the main function
+            self.move_to_mains.append(new_node)
+            return MoveUpMsg(ast.Custom("\n"), up_msg.move_up)
         # TODO: update children_named_idxs
         return MoveUpMsg(new_node, up_msg.move_up)
 
@@ -263,6 +290,8 @@ class TransformVisitor(IVisitor):
             for i in range(len(body.children)):
                 if body.children[i].text == "{":
                     body.children.insert(i + 1, ast.Custom(setup_env_vars_run_str))
+                    for j, move_node in enumerate(self.move_to_mains):
+                        body.children.insert(i + 2 + j, move_node)
                     break
             else:
                 raise Exception("No opening brace found in main function body")

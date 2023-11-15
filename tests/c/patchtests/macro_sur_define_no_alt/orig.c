@@ -1,7 +1,7 @@
 #include <stdio.h>      /* printf */
 
 #ifdef FOO
-  int var = 3;
+  #define var 3
 #endif 
  
 int main(){

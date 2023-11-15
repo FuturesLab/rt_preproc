@@ -5,9 +5,10 @@ import json
 import itertools
 import logging
 from colorama import Fore, Style
+from dotenv import load_dotenv
 
 LOGGER = logging.getLogger(__name__)
-
+load_dotenv()
 
 def check_patch_equiv(dir: os.DirEntry[str], post_file: str = None):
     c_compiler = os.getenv("CC", "clang")
@@ -82,7 +83,7 @@ def test_c_func_equivalence_patch(dir: os.DirEntry[str]):
     if not os.path.exists("tmp"):
         os.mkdir("tmp")
     subprocess.run(
-        ["rt_preproc", "patch", "-o", "./tmp/out.c", os.path.join(dir.path, "orig.c")]
+        ["poetry", "run", "rt_preproc", "patch", "-o", "./tmp/out.c", os.path.join(dir.path, "orig.c")],
     ).check_returncode()
     check_patch_equiv(dir, post_file="./tmp/out.c")
 
