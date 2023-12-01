@@ -4,41 +4,10 @@ from multimethod import multimethod
 from rt_preproc.visitors.base import IVisitor, IVisitorCtx
 from collections import defaultdict
 import copy
+from rt_preproc.visitors.patch.data import Macro, FuncDecl, VarDecl, MoveUpMsg
+import rt_preproc.visitors.patch.ast_ext as ast_ext
 
-
-class Macro:
-    def __init__(self, name: str, type: str, def_cond: bool = False):
-        self.name = name
-        self.type = type
-        self.def_cond = def_cond
-
-
-class FuncDecl:
-    def __init__(self, fn_decl: ast.FunctionDeclarator, macro_set: set[Macro]):
-        self.fn_decl = fn_decl
-        self.macro_set = macro_set
-
-
-class VarDecl:
-    def __init__(self, var_decl: ast.Declaration, macro_set: set[Macro]):
-        self.var_decl = var_decl
-        self.macro_set = macro_set
-
-
-class MoveUpMsg:
-    def __init__(
-        self,
-        node: Optional[ast.AstNode] = None,
-        move_up_nodes: List[ast.AstNode] = [],
-        var_decls_up: dict[str, list[VarDecl]] = defaultdict(list),
-    ) -> None:
-        self.node = node
-        self.move_up = []
-        self.var_decls_up = var_decls_up
-        self.move_up.extend(move_up_nodes)
-
-
-class TransformCtx(IVisitorCtx):
+class PatchCtx(IVisitorCtx):
     def __init__(
         self,
         parent_ctx: Optional[Self] = None,
@@ -50,7 +19,7 @@ class TransformCtx(IVisitorCtx):
         self.parent = parent
         self.in_ifdef = in_ifdef or (parent_ctx is not None and parent_ctx.in_ifdef)
         self.ifdef_cond = ifdef_cond
-        self.var_decls: dict[str, list[VarDecl]] = defaultdict(list)
+        self.var_decls: dict[str, List[VarDecl]] = defaultdict(list)
 
     def get_ifdef_cond_stack(self) -> List[Macro]:
         stack = []
@@ -62,7 +31,7 @@ class TransformCtx(IVisitorCtx):
         return stack
 
     def clone(self, parent: ast.AstNode) -> Self:
-        return TransformCtx(
+        return PatchCtx(
             parent_ctx=self.parent_ctx,
             parent=parent,
             in_ifdef=self.in_ifdef,  # readonly
@@ -70,13 +39,30 @@ class TransformCtx(IVisitorCtx):
         )
 
 
-class TransformVisitor(IVisitor):
+def update_if_marker(
+    node: ast.AstNode,
+    ctx: PatchCtx,
+) -> ast.AstNode:
+    """
+    If the node is a marker, convert it to a true AST node.
+    For example, VariableDeclarationMarker -> Declaration
+    """
+    if isinstance(node, ast_ext.Marker):
+        if isinstance(node, ast_ext.VariableDeclarationMarker):
+            return node.var_decl.convert_to_ast(ctx.var_decls)
+        if isinstance(node, ast_ext.VariableUsageMarker):
+            raise Exception("VariableUsageMarker unimplemented")
+        else:
+            raise Exception("Unexpected marker type")
+    return node
+
+class PatchVisitor(IVisitor):
     """Visitor for performing variability transformations on AST nodes."""
 
     def __init__(self) -> None:
         self.macros: dict[str, str] = {}
         self.structs: dict[str, ast.StructSpecifier] = {}
-        self.fn_decls: dict[str, list[FuncDecl]] = defaultdict(list)
+        self.fn_decls: dict[str, List[FuncDecl]] = defaultdict(list)
         self.move_to_mains: List[ast.AstNode] = []
 
     def build_setup_prelude(self) -> str:
@@ -108,19 +94,21 @@ class TransformVisitor(IVisitor):
     def visit_children(
         self,
         node: ast.AstNode,
-        ctx: TransformCtx,
+        ctx: PatchCtx,
     ) -> MoveUpMsg:
         move_up_all = MoveUpMsg()
         i = 0
 
         while i < len(node.children):
-            up_msg = node.children[i].accept(self, ctx.clone(node))
+            up_msg: MoveUpMsg = node.children[i].accept(self, ctx.clone(node))
             move_up = up_msg.move_up
             new_node = up_msg.node
             if ctx.in_ifdef:
                 move_up_all.move_up.extend(move_up)
             elif len(move_up) > 0:
-                # put all the move_ups here in node.children
+                # since we are now out of the ifdef block, we need to convert the move_up nodes to 
+                # real AST nodes (in the case of VariableDeclarationMarker) and put them in the children list
+                move_up = [update_if_marker(node, ctx) for node in move_up]
                 node.children = node.children[:i] + move_up + node.children[i:]
                 i += len(move_up)
             # a bit hacky, delete the semicolon after a call expression converted to a if chain
@@ -139,17 +127,17 @@ class TransformVisitor(IVisitor):
     """Visitor functions below"""
 
     @multimethod
-    def visit(self, node: ast.TranslationUnit, ctx: TransformCtx) -> MoveUpMsg:
+    def visit(self, node: ast.TranslationUnit, ctx: PatchCtx) -> MoveUpMsg:
         up_msg = self.visit_children(node, ctx)
         assert len(up_msg.move_up) == 0
         node.children.insert(0, ast.Custom(self.build_setup_prelude()))
         return MoveUpMsg(node, up_msg.move_up)
 
     @visit.register
-    def _(self, node: ast.PreprocElse, ctx: TransformCtx) -> MoveUpMsg:
+    def _(self, node: ast.PreprocElse, ctx: PatchCtx) -> MoveUpMsg:
         up_msg = self.visit_children(
             node,
-            TransformCtx(
+            PatchCtx(
                 parent=node,
                 in_ifdef=True,
                 parent_ctx=ctx.parent_ctx,  # we skip the ctx of the ifdef to act like preproc else is on the same syntax level as the ifdef
@@ -163,10 +151,10 @@ class TransformVisitor(IVisitor):
         return MoveUpMsg(node, up_msg.move_up)
 
     @visit.register
-    def _(self, node: ast.PreprocIfdef, ctx: TransformCtx) -> MoveUpMsg:
+    def _(self, node: ast.PreprocIfdef, ctx: PatchCtx) -> MoveUpMsg:
         up_msg = self.visit_children(
             node,
-            TransformCtx(
+            PatchCtx(
                 parent=node,
                 in_ifdef=True,
                 parent_ctx=ctx,
@@ -218,14 +206,14 @@ class TransformVisitor(IVisitor):
                     ]
                 )
         if isinstance(ctx.parent, ast.TranslationUnit):
-            # if this is a top level ifdef, we need to move it to the main function
+            # if this is a top level ifdef, we need to move what this would become to the main function
             self.move_to_mains.append(new_node)
             return MoveUpMsg(ast.Custom("\n"), up_msg.move_up)
         # TODO: update children_named_idxs
         return MoveUpMsg(new_node, up_msg.move_up)
 
     @visit.register
-    def _(self, node: ast.Declaration, ctx: TransformCtx) -> MoveUpMsg:
+    def _(self, node: ast.Declaration, ctx: PatchCtx) -> MoveUpMsg:
         up_msg = self.visit_children(node, ctx)
         if ctx.in_ifdef:
             # move this declaration up to the parent,
@@ -239,16 +227,18 @@ class TransformVisitor(IVisitor):
             else:
                 name_node = init_decl.get_named_child(0)
 
-            move_up_node = ast.Declaration()
-            move_up_node.children = [
-                node.get_named_child(0),
-                ast.Unnamed(" "),
-                name_node,
-                ast.Unnamed(" = "),
-                ast.Identifier("UNDEFINED_Int"),  # TODO: handle other data types
-                ast.Unnamed(";"),
-                ast.Whitespace("\n"),
-            ]
+            type_node = node.get_named_child(0)
+            type_str = type_node.text
+            macro_set = set(ctx.get_ifdef_cond_stack())
+            move_up_node = ast_ext.VariableDeclarationMarker(
+                VarDecl(
+                    name_node.text,
+                    type_str,
+                    # TODO: handle other data types
+                    ast.Identifier("UNDEFINED_Int"),
+                    macro_set,
+                )
+            )
             up_msg.move_up.append(move_up_node)
             new_node = None
             if not is_id:
@@ -265,7 +255,7 @@ class TransformVisitor(IVisitor):
             return MoveUpMsg(None, up_msg.move_up)
 
     @visit.register
-    def _(self, node: ast.FunctionDefinition, ctx: TransformCtx) -> MoveUpMsg:
+    def _(self, node: ast.FunctionDefinition, ctx: PatchCtx) -> MoveUpMsg:
         up_msg = self.visit_children(node, ctx)
 
         func_decl = node.get_named_child(1)
@@ -322,7 +312,7 @@ class TransformVisitor(IVisitor):
         return MoveUpMsg(None, up_msg.move_up)
 
     @visit.register
-    def _(self, node: ast.CallExpression, ctx: TransformCtx) -> MoveUpMsg:
+    def _(self, node: ast.CallExpression, ctx: PatchCtx) -> MoveUpMsg:
         up_msg = self.visit_children(node, ctx)
         fn_name = node.get_named_child(0).text
         if len(self.fn_decls[fn_name]) > 1:
@@ -330,7 +320,6 @@ class TransformVisitor(IVisitor):
             macro_set = set(ctx.get_ifdef_cond_stack())
             for i, fn_decl in enumerate(self.fn_decls[fn_name]):
                 # switch on the ifdef conditions
-                # TODO: emit a switch statement, not just node
                 if_statement = ast.IfStatement()
                 if_statement.children = [
                     ast.Unnamed("if" if i == 0 else "else if"),
@@ -346,9 +335,8 @@ class TransformVisitor(IVisitor):
                             ast.Whitespace(" "),
                             ast.Unnamed("==" if cond_macro.def_cond else "!="),
                             ast.Whitespace(" "),
-                            ast.Identifier(
-                                "UNDEFINED_Int"
-                            ),  # TODO: handle other data types
+                            # TODO: handle other data types
+                            ast.Identifier("UNDEFINED_Int"),
                             ast.Whitespace(" "),
                             ast.Unnamed("&&"),
                             ast.Whitespace(" "),
@@ -380,8 +368,13 @@ class TransformVisitor(IVisitor):
         else:
             return MoveUpMsg(node, up_msg.move_up)
 
+    @visit.register
+    def _(self, node: ast.StructSpecifier, ctx: PatchCtx) -> MoveUpMsg:
+        up_msg = self.visit_children(node, ctx)
+        return MoveUpMsg(None, up_msg.move_up)
+
     # General expressions...
     @visit.register
-    def _(self, node: ast.AstNode, ctx: TransformCtx) -> MoveUpMsg:
+    def _(self, node: ast.AstNode, ctx: PatchCtx) -> MoveUpMsg:
         up_msg = self.visit_children(node, ctx)
         return MoveUpMsg(None, up_msg.move_up)

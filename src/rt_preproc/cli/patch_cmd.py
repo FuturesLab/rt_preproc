@@ -2,7 +2,7 @@ from cleo.commands.command import Command
 from cleo.helpers import argument, option
 from rt_preproc.parser.ast import AstNode
 from rt_preproc.parser.parser import Parser
-from rt_preproc.visitors.transform import TransformCtx, TransformVisitor
+from rt_preproc.visitors.patch.patch import PatchCtx, PatchVisitor
 from rt_preproc.visitors.print import PrintCtx, PrintVisitor
 
 
@@ -41,8 +41,8 @@ class PatchCmd(Command):
                 printer = PrintVisitor()
                 root_node.accept(printer, PrintCtx())
 
-            visitor = TransformVisitor()
-            root_node.accept(visitor, TransformCtx())
+            visitor = PatchVisitor()
+            root_node.accept(visitor, PatchCtx())
 
             if not just_output:
                 self.line("\n---- PATCHED C SOURCE ----")

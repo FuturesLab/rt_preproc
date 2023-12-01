@@ -2,8 +2,6 @@ from typing import Union, Optional, List, Self
 from tree_sitter import Node as BaseTsNode
 from rt_preproc.parser.base import INode
 from rt_preproc.visitors.base import IVisitor, IVisitorCtx
-
-
 class AstNode(INode):
     base_node: Optional[BaseTsNode]
     """
@@ -1178,7 +1176,6 @@ class Unnamed(AstNode):
 class Whitespace(AstNode):
     field_names = []
     children: None
-
 
 class Custom(AstNode):
     field_names = []
