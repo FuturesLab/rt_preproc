@@ -406,7 +406,6 @@ class PatchVisitor(IVisitor):
                     ast.Unnamed("{"),
                     ast.Whitespace("\n"),
                     new_node,
-                    ast.Unnamed(";"),
                     ast.Whitespace("\n"),
                     ast.Unnamed("}"),
                     ast.Whitespace("\n"),

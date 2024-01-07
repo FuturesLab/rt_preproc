@@ -46,7 +46,7 @@ class PatchCmd(Command):
 
             if not just_output:
                 self.line("\n---- PATCHED C SOURCE ----")
-            printer = PrintVisitor(output_file=output_file)
+            printer = PrintVisitor(output_file=output_file, use_astyle=self.option("fmt"))
             root_node.accept(printer, PrintCtx())
 
     def handle(self):
