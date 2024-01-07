@@ -13,6 +13,7 @@ cleo = "^2.0.1"
 multimethod = "^1.9.1"
 colorama = "^0.4.6"
 astyle-py = "^1.0.5"
+python-dotenv = "^1.0.0"
 
 [tool.poetry.group.test.dependencies]
 pytest = "^7.3.1"
