@@ -365,19 +365,19 @@ class PatchVisitor(IVisitor):
     @visit.register
     def _(self, node: ast.Declaration, ctx: PatchCtx) -> MoveUpMsg:
         up_msg = self.visit_children(node, ctx)
+        init_decl = node.get_named_child(1)
+        name_node = None
+        is_id = isinstance(init_decl, ast.Identifier)
+        if is_id:
+            name_node = init_decl
+        else:
+            name_node = init_decl.get_named_child(0)
+        type_node = node.get_named_child(0)
+        type_str = type_node.text
         if ctx.in_ifdef:
             # move this declaration up to the parent,
             # but with UndefinedInt as the initializer
             # and modify this to be an assignment
-            init_decl = node.get_named_child(1)
-            name_node = None
-            is_id = isinstance(init_decl, ast.Identifier)
-            if is_id:
-                name_node = init_decl
-            else:
-                name_node = init_decl.get_named_child(0)
-            type_node = node.get_named_child(0)
-            type_str = type_node.text
             macro_set = set(ctx.get_ifdef_cond_stack())
             move_up_node = ast_ext.VariableDeclarationMarker(
                 VarDecl(
@@ -391,9 +391,10 @@ class PatchVisitor(IVisitor):
             up_msg.move_ups.append(move_up_node)
             new_node = None
 
-            init_rhs = init_decl.get_named_child(1)
+            # if it wasn't an identifier, then the declaration was an init declarator
+            if isinstance(init_decl, ast.InitDeclarator):
+                init_rhs = init_decl.get_named_child(1)
 
-            if not is_id:
                 new_node = ast.AssignmentExpression()
                 new_node.children = [
                     name_node,
@@ -402,8 +403,50 @@ class PatchVisitor(IVisitor):
                     ast.Unnamed(";"),
                     ast.Whitespace("\n"),
                 ]
+                dup_node = self.multiversal_duplication(new_node, ctx, up_msg)
+                if dup_node is not None:
+                    new_node = dup_node
+
             return MoveUpMsg(new_node, up_msg.move_ups)
-        else:
+        elif isinstance(init_decl, ast.InitDeclarator):
+            init_rhs = init_decl.get_named_child(1)
+
+            rename_dict = self.build_rename_dict(ctx, up_msg.var_idents)
+            has_variability = not all(
+                all(len(var_ident.macro_set) == 0 for var_ident in var_idents)
+                for var_idents in rename_dict.values()
+            )
+            # if there is variability, we need to convert this to compound statement
+            # with a declaration to UndefinedInt
+            # and then add the assignments for each combination of ifdef conditions
+            if has_variability:
+                macro_set = set(ctx.get_ifdef_cond_stack())
+                undef_decl = VarDecl(
+                    name_node.text,
+                    type_str,
+                    # TODO: handle other data types
+                    ast.Identifier("UNDEFINED_Int"),
+                    macro_set,
+                )
+                compound_stmt = ast.CompoundStatement()
+                compound_stmt.children = [
+                    undef_decl.convert_to_ast(ctx.var_decls),
+                ]
+                
+                assign_node = ast.AssignmentExpression()
+                assign_node.children = [
+                    name_node,
+                    ast.Unnamed("="),
+                    init_rhs,
+                    ast.Unnamed(";"),
+                    ast.Whitespace("\n"),
+                ]
+                dup_assigns = self.multiversal_duplication(assign_node, ctx, up_msg)
+                if dup_assigns is not None:
+                    compound_stmt.children.append(dup_assigns)
+                else:
+                    compound_stmt.children.append(assign_node)
+                return MoveUpMsg(compound_stmt, up_msg.move_ups)
             return MoveUpMsg(None, up_msg.move_ups)
 
     @visit.register
@@ -442,7 +485,6 @@ class PatchVisitor(IVisitor):
         else:
             # if in ifdef block, move this function definition up to the parent
             if ctx.in_ifdef:
-                # TODO: add an assertion to the body that the ifdef condition is true
                 body = node.get_named_child(2)
                 for i in range(len(body.children)):
                     if body.children[i].text == "{":
