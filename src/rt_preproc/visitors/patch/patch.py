@@ -4,8 +4,10 @@ from multimethod import multimethod
 from rt_preproc.visitors.base import IVisitor, IVisitorCtx
 from collections import defaultdict
 import copy
-from rt_preproc.visitors.patch.data import Macro, FuncDecl, VarDecl, MoveUpMsg
+from rt_preproc.visitors.patch.data import Macro, FuncDecl, VarDecl, VarIdent, MoveUpMsg
 import rt_preproc.visitors.patch.ast_ext as ast_ext
+import itertools
+
 
 class PatchCtx(IVisitorCtx):
     def __init__(
@@ -14,12 +16,13 @@ class PatchCtx(IVisitorCtx):
         parent: Optional[ast.AstNode] = None,
         in_ifdef: bool = False,
         ifdef_cond: Optional[Macro] = None,
+        var_decls: dict[str, List[VarDecl]] = defaultdict(list),
     ) -> None:
         self.parent_ctx = parent_ctx
         self.parent = parent
         self.in_ifdef = in_ifdef or (parent_ctx is not None and parent_ctx.in_ifdef)
         self.ifdef_cond = ifdef_cond
-        self.var_decls: dict[str, List[VarDecl]] = defaultdict(list)
+        self.var_decls = var_decls
 
     def get_ifdef_cond_stack(self) -> List[Macro]:
         stack = []
@@ -36,6 +39,7 @@ class PatchCtx(IVisitorCtx):
             parent=parent,
             in_ifdef=self.in_ifdef,  # readonly
             ifdef_cond=copy.deepcopy(self.ifdef_cond),
+            var_decls=copy.deepcopy(self.var_decls),
         )
 
 
@@ -55,6 +59,7 @@ def update_if_marker(
         else:
             raise Exception("Unexpected marker type")
     return node
+
 
 class PatchVisitor(IVisitor):
     """Visitor for performing variability transformations on AST nodes."""
@@ -101,17 +106,24 @@ class PatchVisitor(IVisitor):
 
         while i < len(node.children):
             up_msg: MoveUpMsg = node.children[i].accept(self, ctx.clone(node))
-            move_up = up_msg.move_up
+            move_up_all.var_idents.update(up_msg.var_idents)
+            move_ups = up_msg.move_ups
             new_node = up_msg.node
             if ctx.in_ifdef:
-                move_up_all.move_up.extend(move_up)
-            elif len(move_up) > 0:
-                # since we are now out of the ifdef block, we need to convert the move_up nodes to 
+                move_up_all.move_ups.extend(move_ups)
+            elif len(move_ups) > 0:
+                # for variable declarations, we need to add them to the ctx's var_decls dict
+                for move_node in move_ups:
+                    if isinstance(move_node, ast_ext.VariableDeclarationMarker):
+                        ctx.var_decls[move_node.var_decl.name].append(
+                            move_node.var_decl
+                        )
+                # since we are now out of the ifdef block, we need to convert the move_up nodes to
                 # real AST nodes (in the case of VariableDeclarationMarker) and put them in the children list
-                move_up = [update_if_marker(node, ctx) for node in move_up]
-                node.children = node.children[:i] + move_up + node.children[i:]
-                i += len(move_up)
-            # a bit hacky, delete the semicolon after a call expression converted to a if chain
+                move_ups = [update_if_marker(node, ctx) for node in move_ups]
+                node.children = node.children[:i] + move_ups + node.children[i:]
+                i += len(move_ups)
+            # a bit hacky, delete the semicolon after a call expression is converted to an if chain
             if isinstance(node.children[i], ast.CallExpression) and not isinstance(
                 new_node, ast.CallExpression
             ):
@@ -129,9 +141,13 @@ class PatchVisitor(IVisitor):
     @multimethod
     def visit(self, node: ast.TranslationUnit, ctx: PatchCtx) -> MoveUpMsg:
         up_msg = self.visit_children(node, ctx)
-        assert len(up_msg.move_up) == 0
+        assert len(up_msg.move_ups) == 0
         node.children.insert(0, ast.Custom(self.build_setup_prelude()))
-        return MoveUpMsg(node, up_msg.move_up)
+        return MoveUpMsg(node, up_msg.move_ups)
+
+    @visit.register
+    def _(self, node: ast.Identifier, ctx: PatchCtx) -> MoveUpMsg:
+        return MoveUpMsg(node, var_idents=[node.text])
 
     @visit.register
     def _(self, node: ast.PreprocElse, ctx: PatchCtx) -> MoveUpMsg:
@@ -148,7 +164,7 @@ class PatchVisitor(IVisitor):
                 ),
             ),
         )
-        return MoveUpMsg(node, up_msg.move_up)
+        return MoveUpMsg(node, up_msg.move_ups)
 
     @visit.register
     def _(self, node: ast.PreprocIfdef, ctx: PatchCtx) -> MoveUpMsg:
@@ -170,7 +186,7 @@ class PatchVisitor(IVisitor):
         if len(body_children) == 0 or all(
             isinstance(c, ast.Whitespace) for c in body_children
         ):
-            return MoveUpMsg(ast.Custom("\n"), up_msg.move_up)
+            return MoveUpMsg(ast.Custom("\n"), up_msg.move_ups)
 
         new_node = ast.IfStatement()
         new_node.children = [
@@ -208,9 +224,9 @@ class PatchVisitor(IVisitor):
         if isinstance(ctx.parent, ast.TranslationUnit):
             # if this is a top level ifdef, we need to move what this would become to the main function
             self.move_to_mains.append(new_node)
-            return MoveUpMsg(ast.Custom("\n"), up_msg.move_up)
+            return MoveUpMsg(ast.Custom("\n"), up_msg.move_ups)
         # TODO: update children_named_idxs
-        return MoveUpMsg(new_node, up_msg.move_up)
+        return MoveUpMsg(new_node, up_msg.move_ups)
 
     @visit.register
     def _(self, node: ast.Declaration, ctx: PatchCtx) -> MoveUpMsg:
@@ -226,7 +242,6 @@ class PatchVisitor(IVisitor):
                 name_node = init_decl
             else:
                 name_node = init_decl.get_named_child(0)
-
             type_node = node.get_named_child(0)
             type_str = type_node.text
             macro_set = set(ctx.get_ifdef_cond_stack())
@@ -239,7 +254,7 @@ class PatchVisitor(IVisitor):
                     macro_set,
                 )
             )
-            up_msg.move_up.append(move_up_node)
+            up_msg.move_ups.append(move_up_node)
             new_node = None
             if not is_id:
                 new_node = ast.AssignmentExpression()
@@ -250,9 +265,9 @@ class PatchVisitor(IVisitor):
                     ast.Unnamed(";"),
                     ast.Whitespace("\n"),
                 ]
-            return MoveUpMsg(new_node, up_msg.move_up)
+            return MoveUpMsg(new_node, up_msg.move_ups)
         else:
-            return MoveUpMsg(None, up_msg.move_up)
+            return MoveUpMsg(None, up_msg.move_ups)
 
     @visit.register
     def _(self, node: ast.FunctionDefinition, ctx: PatchCtx) -> MoveUpMsg:
@@ -286,7 +301,7 @@ class PatchVisitor(IVisitor):
             else:
                 raise Exception("No opening brace found in main function body")
             node.set_named_child(2, body)
-            return MoveUpMsg(node, up_msg.move_up)
+            return MoveUpMsg(node, up_msg.move_ups)
         else:
             # if in ifdef block, move this function definition up to the parent
             if ctx.in_ifdef:
@@ -306,10 +321,137 @@ class PatchVisitor(IVisitor):
                     raise Exception("No opening brace found for function body")
                 body.children.append(ast.Whitespace("\n"))
                 node.set_named_child(2, body)
-                up_msg.move_up.append(node)
-                return MoveUpMsg(ast.Whitespace("\n"), up_msg.move_up)
+                up_msg.move_ups.append(node)
+                return MoveUpMsg(ast.Whitespace("\n"), up_msg.move_ups)
 
-        return MoveUpMsg(None, up_msg.move_up)
+        return MoveUpMsg(None, up_msg.move_ups)
+
+    # @visit.register
+    # def _(self, node: ast.Declaration, ctx: PatchCtx) -> MoveUpMsg:
+    #     # TODO: here is where we should also handle the magic of renaming variables based on their macro set
+    #     raise Exception("Declaration unimplemented")
+
+    @visit.register
+    def _(self, node: ast.ExpressionStatement, ctx: PatchCtx) -> MoveUpMsg:
+        # TODO: here is where we should handle the magic of renaming variables based on their macro set
+        #
+        up_msg = self.visit_children(node, ctx)
+
+        rename_set: dict[str, List[VarIdent]] = defaultdict(list)
+        ctx_macro_set = set(ctx.get_ifdef_cond_stack())
+        for ident in up_msg.var_idents:
+            # if the identifier is in the macro set, we'll need to duplicate and rename
+            # let's gather up all the variable decls that match this identifier
+            if ident in ctx.var_decls:
+                for i, var_decl in enumerate(ctx.var_decls[ident]):
+                    # we only need to rename in the case where a macro
+                    # is in the var_decl's macro set that is not in the current ifdef cond stack
+                    remainder_macro_set = var_decl.macro_set - ctx_macro_set
+                    # TODO: move this renaming functionality into data.py
+                    renamed_var_ident = VarIdent(
+                        ident + "_" + str(i + 1) if i > 0 else ident,
+                        remainder_macro_set,
+                        orig_name=ident,
+                    )
+                    rename_set[ident].append(renamed_var_ident)
+            # if there are none (in the case of left hand init declarators), we don't need to rename
+            # so no need for an else case here
+
+        # if the macro set is empty for all the variables, we don't need to do anything
+        # without this, the code still works but emits extra if (1) {...} statements unnecessarily
+        if all(
+            all(len(var_ident.macro_set) == 0 for var_ident in var_idents)
+            for var_idents in rename_set.values()
+        ):
+            return MoveUpMsg(None, up_msg.move_ups)
+
+        # now for each of the combinations of renames, we need to duplicate the node and replace the identifiers
+        out_node = ast.CompoundStatement()
+        for i, combination in enumerate(itertools.product(*rename_set.values())):
+            new_node = node.deepcopy()
+            if not all(
+                var_ident.orig_name == var_ident.name for var_ident in combination
+            ):
+                for var_ident in combination:
+                    new_node.replace_ident(var_ident.orig_name, var_ident.name)
+
+            # now add an if statement around it using the macros in combination
+            if_statement = ast.IfStatement()
+            if_statement.children = [
+                ast.Unnamed("if" if i == 0 else "else if"),
+                ast.Whitespace(" "),
+                ast.Unnamed("("),
+            ]
+            # TODO: filter out incompatible macros
+            for var_ident in combination:
+                for cond_macro in var_ident.macro_set:
+                    if_statement.children.extend(
+                        [
+                            ast.Whitespace(" "),
+                            ast.Identifier(cond_macro.name),
+                            ast.Whitespace(" "),
+                            ast.Unnamed("==" if cond_macro.def_cond else "!="),
+                            ast.Whitespace(" "),
+                            # TODO: handle other data types
+                            ast.Custom("UNDEFINED_Int"),
+                            ast.Whitespace(" "),
+                            ast.Unnamed("&&"),
+                            ast.Whitespace(" "),
+                        ]
+                    )
+            if_statement.children.append(ast.TrueBool("1"))
+            if_statement.children.extend(
+                [
+                    ast.Unnamed(")"),
+                    ast.Unnamed("{"),
+                    ast.Whitespace("\n"),
+                    new_node,
+                    ast.Unnamed(";"),
+                    ast.Whitespace("\n"),
+                    ast.Unnamed("}"),
+                    ast.Whitespace("\n"),
+                ]
+            )
+            else_clause = ast.ElseClause()
+            else_clause.children = [
+                ast.Unnamed("else"),
+                ast.Whitespace(" "),
+                ast.Unnamed("{"),
+                ast.Whitespace("\n"),
+                ast.Custom("assert(0);\n"),
+                ast.Unnamed("}"),
+                ast.Whitespace("\n"),
+            ]
+            if_statement.children.append(else_clause)
+            out_node.children.append(if_statement)
+
+        # we consumed the var_idents here so they don't get moved up
+        return MoveUpMsg(out_node, up_msg.move_ups)
+
+    # @visit.register
+    # def _(self, node: ast.AssignmentExpression, ctx: PatchCtx) -> MoveUpMsg:
+    #     up_msg = self.visit_children(node, ctx)
+    #     if ctx.in_ifdef:
+    #         # move this assignment up to the parent,
+    #         #  but with UndefinedInt as the initializer
+    #         # and modify this to be an assignment
+    #         init_decl = node.get_named_child(1)
+    #         name_node = None
+    #         is_id = isinstance(init_decl, ast.Identifier)
+    #         if is_id:
+    #             name_node = init_decl
+    #         else:
+    #             name_node = init_decl.get_named_child(0)
+
+    #         type_node = node.get_named_child(0)
+    #         type_str = type_node.text
+    #         macro_set = set(ctx.get_ifdef_cond_stack())
+    #         move_up_node = ast_ext.VariableDeclarationMarker(
+    #             VarDecl(
+    #                 name_node.text,
+    #                 type_str,
+
+    #     return MoveUpMsg(None, up_msg.move_up)
 
     @visit.register
     def _(self, node: ast.CallExpression, ctx: PatchCtx) -> MoveUpMsg:
@@ -364,17 +506,12 @@ class PatchVisitor(IVisitor):
                     ]
                 )
                 compound_stmt.children.append(if_statement)
-            return MoveUpMsg(compound_stmt, up_msg.move_up)
+            return MoveUpMsg(compound_stmt, up_msg.move_ups)
         else:
-            return MoveUpMsg(node, up_msg.move_up)
-
-    @visit.register
-    def _(self, node: ast.StructSpecifier, ctx: PatchCtx) -> MoveUpMsg:
-        up_msg = self.visit_children(node, ctx)
-        return MoveUpMsg(None, up_msg.move_up)
+            return MoveUpMsg(node, up_msg.move_ups)
 
     # General expressions...
     @visit.register
     def _(self, node: ast.AstNode, ctx: PatchCtx) -> MoveUpMsg:
         up_msg = self.visit_children(node, ctx)
-        return MoveUpMsg(None, up_msg.move_up)
+        return MoveUpMsg(None, up_msg.move_ups, up_msg.var_idents)

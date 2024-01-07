@@ -5,6 +5,7 @@
 #endif 
  
 int main(){
-  int x = var + 1;
+  int x = 0;
+  x = var + 1 + 1;
   printf("%d", x);
 }

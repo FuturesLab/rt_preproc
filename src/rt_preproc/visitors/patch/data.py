@@ -1,4 +1,4 @@
-from typing import Optional, List, Any, Self
+from typing import Optional, List, Any, Self, Set
 import rt_preproc.parser.ast as ast
 from collections import defaultdict
 
@@ -8,12 +8,24 @@ class Macro:
         self.type = type
         self.def_cond = def_cond
 
+    def __eq__(self, other: Any) -> bool:
+        if not isinstance(other, Macro):
+            return False
+        return self.name == other.name and self.type == other.type and self.def_cond == other.def_cond
+
+    def __hash__(self) -> int:
+        return hash((self.name, self.type, self.def_cond))
 
 class FuncDecl:
     def __init__(self, fn_decl: ast.FunctionDeclarator, macro_set: set[Macro]):
         self.fn_decl = fn_decl
         self.macro_set = macro_set
 
+class VarIdent:
+    def __init__(self, name: str, macro_set: set[Macro], orig_name: Optional[str] = None):
+        self.name = name
+        self.macro_set = macro_set
+        self.orig_name = orig_name
 
 class VarDecl:
     def __init__(
@@ -56,9 +68,13 @@ class MoveUpMsg:
         self,
         node: Optional[ast.AstNode] = None,
         move_up_nodes: List[ast.AstNode] = [],
-        var_decls_up: dict[str, List[VarDecl]] = defaultdict(list),
+        var_idents: Set[str] = set(), # these are variable identifers that are compile-time variable
     ) -> None:
         self.node = node
-        self.move_up: List[ast.AstNode] = []
-        self.var_decls_up = var_decls_up
-        self.move_up.extend(move_up_nodes)
+
+        self.move_ups: List[ast.AstNode] = []
+        self.move_ups.extend(move_up_nodes)
+        # if I do self.var_idents = var_idents instead, then the var_idents will be shared between all instances (we don't want that)
+        # same for move_ups
+        self.var_idents: Set[str] = set()
+        self.var_idents.update(var_idents)

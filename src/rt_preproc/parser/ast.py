@@ -115,6 +115,28 @@ class AstNode(INode):
         else:
             ast_node.text = None
         return ast_node
+    
+    def deepcopy(self) -> Self:
+        """
+        Deepcopy this node and all children.
+        """
+        new_node = type(self)()
+        new_node.base_node = self.base_node
+        new_node.parent = self.parent
+        new_node.field_names = self.field_names
+        new_node.children = [child.deepcopy() for child in self.children]
+        new_node.children_named_idxs = self.children_named_idxs
+        new_node.text = self.text
+        return new_node
+    
+    def replace_ident(self, ident: str, replacement: str) -> None:
+        """
+        Replace all Identifier instances of `ident` with `replacement` in this node and all children.
+        """
+        if isinstance(self, Identifier) and self.text == ident:
+            self.text = self.text.replace(ident, replacement)
+        for child in self.children:
+            child.replace_ident(ident, replacement)
 
 
 # Generated code below:
