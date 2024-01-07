@@ -176,6 +176,18 @@ class PatchVisitor(IVisitor):
                     rename_dict[ident].append(renamed_var_ident)
             # if there are none (in the case of left hand init declarators), we don't need to rename
             # so no need for an else case here
+
+        # handle function identifiers here too
+        for ident in var_idents:
+            if len(self.fn_decls[ident]) > 1:
+                for i, fn_decl in enumerate(self.fn_decls[ident]):
+                    remainder_macro_set = fn_decl.macro_set - ctx_macro_set
+                    renamed_var_ident = VarIdent(
+                        ident + "_" + str(i + 1) if i > 0 else ident,
+                        remainder_macro_set,
+                        orig_name=ident,
+                    )
+                    rename_dict[ident].append(renamed_var_ident)
         return rename_dict
 
     def multiversal_duplication(
@@ -189,7 +201,6 @@ class PatchVisitor(IVisitor):
 
         If there are no variable identifiers that need to be renamed, this function returns None.
         """
-        # TODO: handle call expressions here as well
         if rename_dict is None:
             rename_dict = self.build_rename_dict(ctx, up_msg.var_idents)
         # if the macro set is empty for all the variables, we don't need to do anything
@@ -246,18 +257,19 @@ class PatchVisitor(IVisitor):
                     ast.Whitespace("\n"),
                 ]
             )
-            else_clause = ast.ElseClause()
-            else_clause.children = [
-                ast.Unnamed("else"),
-                ast.Whitespace(" "),
-                ast.Unnamed("{"),
-                ast.Whitespace("\n"),
-                ast.Custom("assert(0);\n"),
-                ast.Unnamed("}"),
-                ast.Whitespace("\n"),
-            ]
-            if_statement.children.append(else_clause)
             out_node.children.append(if_statement)
+        
+        else_clause = ast.ElseClause()
+        else_clause.children = [
+            ast.Unnamed("else"),
+            ast.Whitespace(" "),
+            ast.Unnamed("{"),
+            ast.Whitespace("\n"),
+            ast.Custom("assert(0);\n"),
+            ast.Unnamed("}"),
+            ast.Whitespace("\n"),
+        ]
+        out_node.children.append(else_clause)
 
         return out_node
 
@@ -517,63 +529,6 @@ class PatchVisitor(IVisitor):
 
         # we consumed the var_idents here so they don't get moved up
         return MoveUpMsg(out_node, up_msg.move_ups)
-
-    @visit.register
-    def _(self, node: ast.CallExpression, ctx: PatchCtx) -> MoveUpMsg:
-        up_msg = self.visit_children(node, ctx)
-        fn_name = node.get_named_child(0).text
-        if len(self.fn_decls[fn_name]) > 1:
-            compound_stmt = ast.CompoundStatement()
-            macro_set = set(ctx.get_ifdef_cond_stack())
-            for i, fn_decl in enumerate(self.fn_decls[fn_name]):
-                # switch on the ifdef conditions
-                if_statement = ast.IfStatement()
-                if_statement.children = [
-                    ast.Unnamed("if" if i == 0 else "else if"),
-                    ast.Unnamed("("),
-                ]
-                for cond_macro in fn_decl.macro_set:
-                    if cond_macro in macro_set:
-                        continue
-                    if_statement.children.extend(
-                        [
-                            ast.Whitespace(" "),
-                            ast.Identifier(cond_macro.name),
-                            ast.Whitespace(" "),
-                            ast.Unnamed("==" if cond_macro.def_cond else "!="),
-                            ast.Whitespace(" "),
-                            # TODO: handle other data types
-                            ast.Identifier("UNDEFINED_Int"),
-                            ast.Whitespace(" "),
-                            ast.Unnamed("&&"),
-                            ast.Whitespace(" "),
-                        ]
-                    )
-                if_statement.children.append(ast.TrueBool("1"))
-                new_node = node
-                # if not the first function decl, we need to change the function name
-                if i > 0:
-                    new_node = ast.CallExpression()
-                    new_node.children = [
-                        ast.Identifier(node.get_named_child(0).text + "_" + str(i + 1)),
-                        node.get_named_child(1),
-                    ]
-                if_statement.children.extend(
-                    [
-                        ast.Unnamed(")"),
-                        ast.Unnamed("{"),
-                        ast.Whitespace("\n"),
-                        new_node,
-                        ast.Unnamed(";"),
-                        ast.Whitespace("\n"),
-                        ast.Unnamed("}"),
-                        ast.Whitespace("\n"),
-                    ]
-                )
-                compound_stmt.children.append(if_statement)
-            return MoveUpMsg(compound_stmt, up_msg.move_ups, up_msg.var_idents)
-        else:
-            return MoveUpMsg(node, up_msg.move_ups, up_msg.var_idents)
 
     # General expressions...
     @visit.register
