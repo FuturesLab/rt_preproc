@@ -12,7 +12,19 @@ class PatchCmd(Command):
         "Patch a file to convert compile-time C preprocessor macros to runtime logic"
     )
     arguments = [argument("file", description="C file to patch", optional=False)]
-    options = [option("output", "o", description="Output file to write to", flag=False)]
+    options = [
+        option("output", "o", description="Output file to write to", flag=False),
+        option(
+            "fmt",
+            "f",
+            description="Run astyle on the output",
+        ),
+        option(
+            "just_output",
+            "j",
+            description="Just output the patched file",
+        ),
+    ]
 
     def runPatch(self, file: str, just_output: bool = False, output_file: str = None):
         if not just_output:
@@ -39,4 +51,8 @@ class PatchCmd(Command):
 
     def handle(self):
         opt = self.option("output")
-        self.runPatch(self.argument("file"), output_file=opt)
+        self.runPatch(
+            self.argument("file"),
+            just_output=self.option("just_output"),
+            output_file=opt,
+        )

@@ -25,6 +25,25 @@ files = [
 ]
 
 [[package]]
+name = "astyle-py"
+version = "1.0.5"
+description = "Astyle, wrapped in a python package."
+category = "main"
+optional = false
+python-versions = ">=3.8"
+files = [
+    {file = "astyle_py-1.0.5-py2.py3-none-any.whl", hash = "sha256:7649f0b6959878558fafc8d602e4e8e0534bd2319c19959bd3ff2989bcd60d9b"},
+    {file = "astyle_py-1.0.5.tar.gz", hash = "sha256:0a8762c1135bf83947de414437c20dde84cd7bf606368b6721bd0e1d8a9ede54"},
+]
+
+[package.dependencies]
+PyYAML = ">=6.0.1,<6.1.0"
+wasmtime = ">=12.0.0,<12.1.0"
+
+[package.extras]
+dev = ["coverage", "pre-commit", "pytest", "types-PyYAML"]
+
+[[package]]
 name = "black"
 version = "23.10.0"
 description = "The uncompromising code formatter."
@@ -542,7 +561,7 @@ testing = ["argcomplete", "attrs (>=19.2.0)", "hypothesis (>=3.56)", "mock", "no
 name = "pyyaml"
 version = "6.0.1"
 description = "YAML parser and emitter for Python"
-category = "dev"
+category = "main"
 optional = false
 python-versions = ">=3.6"
 files = [
@@ -895,7 +914,26 @@ platformdirs = ">=3.9.1,<4"
 docs = ["furo (>=2023.7.26)", "proselint (>=0.13)", "sphinx (>=7.1.2)", "sphinx-argparse (>=0.4)", "sphinxcontrib-towncrier (>=0.2.1a0)", "towncrier (>=23.6)"]
 test = ["covdefaults (>=2.3)", "coverage (>=7.2.7)", "coverage-enable-subprocess (>=1)", "flaky (>=3.7)", "packaging (>=23.1)", "pytest (>=7.4)", "pytest-env (>=0.8.2)", "pytest-freezer (>=0.4.8)", "pytest-mock (>=3.11.1)", "pytest-randomly (>=3.12)", "pytest-timeout (>=2.1)", "setuptools (>=68)", "time-machine (>=2.10)"]
 
+[[package]]
+name = "wasmtime"
+version = "12.0.0"
+description = "A WebAssembly runtime powered by Wasmtime"
+category = "main"
+optional = false
+python-versions = ">=3.6"
+files = [
+    {file = "wasmtime-12.0.0-py3-none-any.whl", hash = "sha256:1fee5ac11726cad1f69611779e44ffcb60e912479d1a3c7c77099c3c2f068c36"},
+    {file = "wasmtime-12.0.0-py3-none-macosx_10_13_x86_64.whl", hash = "sha256:d5e284b37204535a2817f3563102ce8a41451a5f4203db059b051640bda8bcb8"},
+    {file = "wasmtime-12.0.0-py3-none-macosx_11_0_arm64.whl", hash = "sha256:2a931214e62aa3d23c61b5f5d2cc47ce10d708f4d8d02e12ea87004c0837e650"},
+    {file = "wasmtime-12.0.0-py3-none-manylinux1_x86_64.whl", hash = "sha256:fa5372d8f3e2bfcaaf7cfffb0d5efc640351889d7aed6d34711f32a85fe9b5ff"},
+    {file = "wasmtime-12.0.0-py3-none-manylinux2014_aarch64.whl", hash = "sha256:c72d1f9b253b97aff19375d6980e3e6380929424fe07b56364413bf54fd80049"},
+    {file = "wasmtime-12.0.0-py3-none-win_amd64.whl", hash = "sha256:7eee12e6bb72123b3beec757d6b48f90b09a1097b1c6dadff7013ffbc46df2fe"},
+]
+
+[package.extras]
+testing = ["coverage", "flake8 (==4.0.1)", "pycparser", "pytest", "pytest-flake8", "pytest-mypy"]
+
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.11"
-content-hash = "bb61f59e6fbed4a7f51fb8267f17d300ffa3608c932c8a9b23824aaa9be9a809"
+content-hash = "8d83e271b2403afb3124525c51224ddc49613b8a2dd36f848117c9e2f47cb803"
