@@ -8,6 +8,12 @@ from rt_preproc.visitors.patch.data import Macro, FuncDecl, VarDecl, VarIdent, M
 import rt_preproc.visitors.patch.ast_ext as ast_ext
 import itertools
 
+setup_env_vars_run_str = r"""
+  if (setup_env_vars() != 0) {
+    printf("Error setting up environment variables\n");
+    return 1;
+  }
+            """
 
 class PatchCtx(IVisitorCtx):
     def __init__(
@@ -173,7 +179,7 @@ class PatchVisitor(IVisitor):
         return rename_dict
 
     def multiversal_duplication(
-        self, node: ast.AstNode, ctx: PatchCtx, up_msg: MoveUpMsg
+        self, node: ast.AstNode, ctx: PatchCtx, up_msg: MoveUpMsg, rename_dict: dict[str, List[VarIdent]] = None
     ) -> ast.AstNode:
         """
         This function performs multiversal duplication on a node.
@@ -184,7 +190,8 @@ class PatchVisitor(IVisitor):
         If there are no variable identifiers that need to be renamed, this function returns None.
         """
         # TODO: handle call expressions here as well
-        rename_dict = self.build_rename_dict(ctx, up_msg.var_idents)
+        if rename_dict is None:
+            rename_dict = self.build_rename_dict(ctx, up_msg.var_idents)
         # if the macro set is empty for all the variables, we don't need to do anything
         # without this, the code still works but emits extra if (1) {...} statements unnecessarily
         if all(
@@ -409,6 +416,11 @@ class PatchVisitor(IVisitor):
 
             return MoveUpMsg(new_node, up_msg.move_ups)
         elif isinstance(init_decl, ast.InitDeclarator):
+            # if this is an init declarator, ie: int x = 5;
+            # we need to check if there is variability in the initializer
+            # if there is, we need to convert this to a compound statement
+            # with a declaration to UndefinedInt
+            # and then add the assignments for each combination of ifdef conditions
             init_rhs = init_decl.get_named_child(1)
 
             rename_dict = self.build_rename_dict(ctx, up_msg.var_idents)
@@ -416,9 +428,6 @@ class PatchVisitor(IVisitor):
                 all(len(var_ident.macro_set) == 0 for var_ident in var_idents)
                 for var_idents in rename_dict.values()
             )
-            # if there is variability, we need to convert this to compound statement
-            # with a declaration to UndefinedInt
-            # and then add the assignments for each combination of ifdef conditions
             if has_variability:
                 macro_set = set(ctx.get_ifdef_cond_stack())
                 undef_decl = VarDecl(
@@ -441,7 +450,7 @@ class PatchVisitor(IVisitor):
                     ast.Unnamed(";"),
                     ast.Whitespace("\n"),
                 ]
-                dup_assigns = self.multiversal_duplication(assign_node, ctx, up_msg)
+                dup_assigns = self.multiversal_duplication(assign_node, ctx, up_msg, rename_dict=rename_dict)
                 if dup_assigns is not None:
                     compound_stmt.children.append(dup_assigns)
                 else:
@@ -465,12 +474,6 @@ class PatchVisitor(IVisitor):
             )
             node.set_named_child(1, func_decl)
         if func_name == "main":
-            setup_env_vars_run_str = r"""
-  if (setup_env_vars() != 0) {
-    printf("Error setting up environment variables\n");
-    return 1;
-  }
-            """
             body = node.get_named_child(2)
             for i in range(len(body.children)):
                 if body.children[i].text == "{":
