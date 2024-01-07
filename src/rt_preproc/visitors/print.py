@@ -23,10 +23,10 @@ class PrintVisitor(IVisitor):
             for child in node.children:
                 child.accept(self, ctx)  # ctx is not used in this visitor
         else:  # leaf node
-            if self.output_file is not None:
-                self.output_file.write(node.text)
             if self.use_astyle:
                 self.buffer += node.text
+            elif self.output_file is not None:
+                self.output_file.write(node.text)
             else:
                 print(node.text, end="")
         # if root node, close file and run astyle

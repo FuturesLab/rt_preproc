@@ -48,7 +48,7 @@
             "justMyCode": true,
             "args": [
                 "patch",
-                "../tests/c/patchtests/macro_sur_var_no_alt_expr/orig.c",
+                "../tests/c/patchtests/macro_sur_fn_alt_no_args/orig.c",
                 "-vv",
             ],
         }

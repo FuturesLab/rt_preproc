@@ -49,6 +49,13 @@ class AstNode(INode):
 
     def accept(self, visitor: IVisitor, ctx: IVisitorCtx):
         return visitor.visit(self, ctx)
+    
+    def print(self):
+        if len(self.children) > 0:
+            for child in self.children:
+                child.print()
+        else:  # leaf node
+            print(self.text, end="")
 
     @staticmethod
     def reify(base_node: BaseTsNode, include_whitespace: bool = True) -> "AstNode":
