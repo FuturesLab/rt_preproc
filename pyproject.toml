@@ -12,6 +12,7 @@ tree-sitter = "^0.20.1"
 cleo = "^2.0.1"
 multimethod = "^1.9.1"
 colorama = "^0.4.6"
+astyle-py = "^1.0.5"
 
 [tool.poetry.group.test.dependencies]
 pytest = "^7.3.1"
