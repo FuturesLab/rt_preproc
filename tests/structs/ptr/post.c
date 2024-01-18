@@ -14,13 +14,22 @@ int setup_env_vars() {
   return 0;
 }
 
-int var() {
-  assert(FOO != UNDEFINED_INT);
-  return 3;
+void func(int x){
+  printf("Running FOO: %d\n", x);
+  return;
 }
 
 int main(){
-  setup_env_vars();
-  int x = var() + 1;
-  printf("%d", x);
+  if (setup_env_vars() != 0) {
+    printf("Error setting up environment variables\n");
+    return 1;
+  }
+  int x = UNDEFINED_INT;
+  if (FOO != UNDEFINED_INT) {
+    x = 2;
+  }
+  if (FOO != UNDEFINED_INT) {
+    assert(x != UNDEFINED_INT);
+    func(x);
+  }
 }
