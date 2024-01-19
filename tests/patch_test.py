@@ -70,13 +70,22 @@ def check_patch_equiv(dir: os.DirEntry[str], post_file: str = None):
         assert orig_result.stdout == post_result.stdout
         assert orig_result.returncode == post_result.returncode
 
+def scan_tree_for_test_folder(path):
+    """Recursively yield DirEntry objects for given directory."""
+    for entry in os.scandir(path):
+        if entry.is_dir(follow_symlinks=False):
+            if (not entry.name.startswith(("_", ".")) and
+            any(fname == "orig.c" for fname in os.listdir(entry.path))
+            ):
+                yield entry
+            else:
+                yield from scan_tree_for_test_folder(entry.path)
 
 @pytest.mark.parametrize(
     "dir",
     [
-        pytest.param(it, id=it.name)
-        for it in os.scandir("tests/c/patchtests")
-        if it.is_dir() and not it.name.startswith(("_", "."))
+        pytest.param(it, id=it.path[6:]) # remove "tests/" from path
+        for it in scan_tree_for_test_folder("tests/")
     ],
 )
 def test_c_func_equivalence_patch(dir: os.DirEntry[str]):
@@ -91,9 +100,8 @@ def test_c_func_equivalence_patch(dir: os.DirEntry[str]):
 # @pytest.mark.parametrize(
 #     "dir",
 #     [
-#         pytest.param(it, id=it.name)
-#         for it in os.scandir("tests/c/patchtests")
-#         if it.is_dir() and not it.name.startswith(("_", "."))
+#       pytest.param(it, id=it.path + "/" + it.name )
+#       for it in scan_tree_for_test_folder("tests/")
 #     ],
 # )
 # def test_c_func_equivalence_premade(dir: os.DirEntry[str]):
