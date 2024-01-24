@@ -48,7 +48,7 @@
             "justMyCode": true,
             "args": [
                 "patch",
-                "../tests/define/vars/no_alt_solo/orig.c",
+                "../tests/define/vars/alt/orig.c",
                 "-vv",
             ],
         }

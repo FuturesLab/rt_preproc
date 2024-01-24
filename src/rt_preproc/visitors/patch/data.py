@@ -62,13 +62,14 @@ class VarDecl:
         return new_node
     
 class DefDecl:
-    def __init__(self, name: str, val: str, macro_set: set[Macro]):
+    def __init__(self, name: str, val: str, macro_set: set[Macro], orig_name: str = None):
         self.name = name
         self.val = val
         self.macro_set = macro_set
+        self.orig_name = orig_name or name
 
     def convert_to_ast(self) -> ast.AstNode:
-        new_node = ast.Custom(f"#define {self.name} {self.val}")
+        new_node = ast.Custom(f"#define {self.name} {self.val}\n")
         return new_node
 
 

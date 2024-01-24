@@ -139,7 +139,11 @@ class PatchVisitor(IVisitor):
                             move_node.var_decl
                         )
                     elif isinstance(move_node, ast_ext.PreprocDefinitionMarker):
-                        self.defines[move_node.def_decl.name].append(move_node.def_decl)
+                        # Now this is done in the PreprocDef visitor itself to handle the parent-child relationship
+                        # of the preproc ifdef + else
+                        # This would be run after the ifdef AND else, but we need it to run after the ifdef (so else would catch it)
+                        # self.defines[move_node.def_decl.name].append(move_node.def_decl)
+                        pass
 
                 # since we are now out of the ifdef block, we need to convert the move_up nodes to
                 # real AST nodes (in the case of VariableDeclarationMarker) and put them in the children list
@@ -317,14 +321,16 @@ class PatchVisitor(IVisitor):
     def _(self, node: ast.PreprocDef, ctx: PatchCtx) -> MoveUpMsg:
         up_msg = self.visit_children(node, ctx)
         if ctx.in_ifdef:
+            orig_name = node.get_named_child(0).text
+            name = orig_name
+            if name in self.defines:
+                # if there is already a definition for this macro, we need to rename it
+                name = name + "_" + str(len(self.defines[name]) + 1)
+            def_decl = DefDecl(name, node.get_named_child(1).text, set(ctx.get_ifdef_cond_stack()), orig_name=orig_name)
+            self.defines[orig_name].append(def_decl)
+
             up_msg.move_ups.append(
-                ast_ext.PreprocDefinitionMarker(
-                    DefDecl(
-                        node.get_named_child(0).text,
-                        node.get_named_child(1).text,
-                        set(ctx.get_ifdef_cond_stack()),
-                    )
-                )
+                ast_ext.PreprocDefinitionMarker(def_decl)
             )
             return MoveUpMsg(ast.Whitespace("\n"), up_msg.move_ups)
         return MoveUpMsg(node, up_msg.move_ups)
