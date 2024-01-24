@@ -57,6 +57,15 @@ class AstNode(INode):
         else:  # leaf node
             print(self.text, end="")
 
+    def __str__(self) -> str:
+        buf = ""
+        if len(self.children) > 0:
+            for child in self.children:
+                buf += str(child)
+        else:  # leaf node
+            buf += self.text
+        return buf
+
     @staticmethod
     def reify(base_node: BaseTsNode, include_whitespace: bool = True) -> "AstNode":
         """

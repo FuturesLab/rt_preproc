@@ -1,5 +1,5 @@
 import rt_preproc.parser.ast as ast
-from typing import Optional, List, Any, Self, Set
+from typing import Optional, List, Any, Self, Set, Union
 from multimethod import multimethod
 from rt_preproc.visitors.base import IVisitor, IVisitorCtx
 from collections import defaultdict
@@ -9,6 +9,7 @@ from rt_preproc.visitors.patch.data import (
     FuncDecl,
     VarDecl,
     DefDecl,
+    DefFnDecl,
     VarIdent,
     MoveUpMsg,
 )
@@ -88,7 +89,7 @@ class PatchVisitor(IVisitor):
         self.structs: dict[str, ast.StructSpecifier] = {}
         self.fn_decls: dict[str, List[FuncDecl]] = defaultdict(list)
         self.move_to_mains: List[ast.AstNode] = []
-        self.defines: dict[str, List[DefDecl]] = defaultdict(list)
+        self.defines: dict[str, List[Union[DefDecl, DefFnDecl]]] = defaultdict(list)
 
     def build_setup_prelude(self) -> str:
         buf = ""
@@ -326,12 +327,38 @@ class PatchVisitor(IVisitor):
             if name in self.defines:
                 # if there is already a definition for this macro, we need to rename it
                 name = name + "_" + str(len(self.defines[name]) + 1)
-            def_decl = DefDecl(name, node.get_named_child(1).text, set(ctx.get_ifdef_cond_stack()), orig_name=orig_name)
+            def_decl = DefDecl(
+                name,
+                node.get_named_child(1).text,
+                set(ctx.get_ifdef_cond_stack()),
+                orig_name=orig_name,
+            )
             self.defines[orig_name].append(def_decl)
 
-            up_msg.move_ups.append(
-                ast_ext.PreprocDefinitionMarker(def_decl)
+            up_msg.move_ups.append(ast_ext.PreprocDefinitionMarker(def_decl))
+            return MoveUpMsg(ast.Whitespace("\n"), up_msg.move_ups)
+        return MoveUpMsg(node, up_msg.move_ups)
+
+    @visit.register
+    def _(self, node: ast.PreprocFunctionDef, ctx: PatchCtx) -> MoveUpMsg:
+        up_msg = self.visit_children(node, ctx)
+        if ctx.in_ifdef:
+            orig_name = node.get_named_child(0).text
+            name = orig_name
+            if name in self.defines:
+                # if there is already a definition for this macro, we need to rename it
+                name = name + "_" + str(len(self.defines[name]) + 1)
+
+            def_fn_decl = DefFnDecl(
+                name,
+                node.get_named_child(1),
+                node.get_named_child(2).text,
+                set(ctx.get_ifdef_cond_stack()),
+                orig_name=orig_name,
             )
+            self.defines[orig_name].append(def_fn_decl)
+
+            up_msg.move_ups.append(ast_ext.PreprocDefinitionMarker(def_fn_decl))
             return MoveUpMsg(ast.Whitespace("\n"), up_msg.move_ups)
         return MoveUpMsg(node, up_msg.move_ups)
 
