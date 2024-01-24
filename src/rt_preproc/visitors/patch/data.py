@@ -60,7 +60,16 @@ class VarDecl:
             ast.Custom(";"),
         ]
         return new_node
+    
+class DefDecl:
+    def __init__(self, name: str, val: str, macro_set: set[Macro]):
+        self.name = name
+        self.val = val
+        self.macro_set = macro_set
 
+    def convert_to_ast(self) -> ast.AstNode:
+        new_node = ast.Custom(f"#define {self.name} {self.val}")
+        return new_node
 
 
 class MoveUpMsg:

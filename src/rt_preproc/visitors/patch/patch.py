@@ -4,7 +4,14 @@ from multimethod import multimethod
 from rt_preproc.visitors.base import IVisitor, IVisitorCtx
 from collections import defaultdict
 import copy
-from rt_preproc.visitors.patch.data import Macro, FuncDecl, VarDecl, VarIdent, MoveUpMsg
+from rt_preproc.visitors.patch.data import (
+    Macro,
+    FuncDecl,
+    VarDecl,
+    DefDecl,
+    VarIdent,
+    MoveUpMsg,
+)
 import rt_preproc.visitors.patch.ast_ext as ast_ext
 import itertools
 
@@ -14,6 +21,7 @@ setup_env_vars_run_str = r"""
     return 1;
   }
             """
+
 
 class PatchCtx(IVisitorCtx):
     def __init__(
@@ -63,7 +71,9 @@ def update_if_marker(
     if isinstance(node, ast_ext.Marker):
         if isinstance(node, ast_ext.VariableDeclarationMarker):
             return node.var_decl.convert_to_ast(ctx.var_decls)
-        if isinstance(node, ast_ext.VariableUsageMarker):
+        elif isinstance(node, ast_ext.PreprocDefinitionMarker):
+            return node.def_decl.convert_to_ast()
+        elif isinstance(node, ast_ext.VariableUsageMarker):
             raise Exception("VariableUsageMarker unimplemented")
         else:
             raise Exception("Unexpected marker type")
@@ -78,6 +88,7 @@ class PatchVisitor(IVisitor):
         self.structs: dict[str, ast.StructSpecifier] = {}
         self.fn_decls: dict[str, List[FuncDecl]] = defaultdict(list)
         self.move_to_mains: List[ast.AstNode] = []
+        self.defines: dict[str, List[DefDecl]] = defaultdict(list)
 
     def build_setup_prelude(self) -> str:
         buf = ""
@@ -127,6 +138,9 @@ class PatchVisitor(IVisitor):
                         ctx.var_decls[move_node.var_decl.name].append(
                             move_node.var_decl
                         )
+                    elif isinstance(move_node, ast_ext.PreprocDefinitionMarker):
+                        self.defines[move_node.def_decl.name].append(move_node.def_decl)
+
                 # since we are now out of the ifdef block, we need to convert the move_up nodes to
                 # real AST nodes (in the case of VariableDeclarationMarker) and put them in the children list
                 move_ups = [update_if_marker(node, ctx) for node in move_ups]
@@ -179,19 +193,32 @@ class PatchVisitor(IVisitor):
 
         # handle function identifiers here too
         for ident in var_idents:
-            if len(self.fn_decls[ident]) > 1:
-                for i, fn_decl in enumerate(self.fn_decls[ident]):
-                    remainder_macro_set = fn_decl.macro_set - ctx_macro_set
-                    renamed_var_ident = VarIdent(
-                        ident + "_" + str(i + 1) if i > 0 else ident,
-                        remainder_macro_set,
-                        orig_name=ident,
-                    )
-                    rename_dict[ident].append(renamed_var_ident)
+            for i, fn_decl in enumerate(self.fn_decls[ident]):
+                remainder_macro_set = fn_decl.macro_set - ctx_macro_set
+                renamed_var_ident = VarIdent(
+                    ident + "_" + str(i + 1) if i > 0 else ident,
+                    remainder_macro_set,
+                    orig_name=ident,
+                )
+                rename_dict[ident].append(renamed_var_ident)
+
+        for ident in self.defines:
+            for i, def_decl in enumerate(self.defines[ident]):
+                remainder_macro_set = def_decl.macro_set - ctx_macro_set
+                renamed_var_ident = VarIdent(
+                    ident + "_" + str(i + 1) if i > 0 else ident,
+                    remainder_macro_set,
+                    orig_name=ident,
+                )
+                rename_dict[ident].append(renamed_var_ident)
         return rename_dict
 
     def multiversal_duplication(
-        self, node: ast.AstNode, ctx: PatchCtx, up_msg: MoveUpMsg, rename_dict: dict[str, List[VarIdent]] = None
+        self,
+        node: ast.AstNode,
+        ctx: PatchCtx,
+        up_msg: MoveUpMsg,
+        rename_dict: dict[str, List[VarIdent]] = None,
     ) -> ast.AstNode:
         """
         This function performs multiversal duplication on a node.
@@ -258,7 +285,7 @@ class PatchVisitor(IVisitor):
                 ]
             )
             out_node.children.append(if_statement)
-        
+
         else_clause = ast.ElseClause()
         else_clause.children = [
             ast.Unnamed("else"),
@@ -285,6 +312,22 @@ class PatchVisitor(IVisitor):
     @visit.register
     def _(self, node: ast.Identifier, ctx: PatchCtx) -> MoveUpMsg:
         return MoveUpMsg(node, var_idents=[node.text])
+
+    @visit.register
+    def _(self, node: ast.PreprocDef, ctx: PatchCtx) -> MoveUpMsg:
+        up_msg = self.visit_children(node, ctx)
+        if ctx.in_ifdef:
+            up_msg.move_ups.append(
+                ast_ext.PreprocDefinitionMarker(
+                    DefDecl(
+                        node.get_named_child(0).text,
+                        node.get_named_child(1).text,
+                        set(ctx.get_ifdef_cond_stack()),
+                    )
+                )
+            )
+            return MoveUpMsg(ast.Whitespace("\n"), up_msg.move_ups)
+        return MoveUpMsg(node, up_msg.move_ups)
 
     @visit.register
     def _(self, node: ast.PreprocElse, ctx: PatchCtx) -> MoveUpMsg:
@@ -335,7 +378,7 @@ class PatchVisitor(IVisitor):
         if len(body_children) == 0 or all(
             isinstance(c, ast.Whitespace) for c in body_children
         ):
-            return MoveUpMsg(ast.Custom("\n"), up_msg.move_ups)
+            return MoveUpMsg(ast.Whitespace("\n"), up_msg.move_ups)
 
         body_block = ast.CompoundStatement()
         body_block.children = body_children
@@ -377,7 +420,7 @@ class PatchVisitor(IVisitor):
         if isinstance(ctx.parent, ast.TranslationUnit):
             # if this is a top level ifdef, we need to move what this would become to the main function
             self.move_to_mains.append(new_node)
-            return MoveUpMsg(ast.Custom("\n"), up_msg.move_ups)
+            return MoveUpMsg(ast.Whitespace("\n"), up_msg.move_ups)
         # TODO: update children_named_idxs
         return MoveUpMsg(new_node, up_msg.move_ups)
 
@@ -453,7 +496,7 @@ class PatchVisitor(IVisitor):
                 compound_stmt.children = [
                     undef_decl.convert_to_ast(ctx.var_decls),
                 ]
-                
+
                 assign_node = ast.AssignmentExpression()
                 assign_node.children = [
                     name_node,
@@ -462,7 +505,9 @@ class PatchVisitor(IVisitor):
                     ast.Unnamed(";"),
                     ast.Whitespace("\n"),
                 ]
-                dup_assigns = self.multiversal_duplication(assign_node, ctx, up_msg, rename_dict=rename_dict)
+                dup_assigns = self.multiversal_duplication(
+                    assign_node, ctx, up_msg, rename_dict=rename_dict
+                )
                 if dup_assigns is not None:
                     compound_stmt.children.append(dup_assigns)
                 else:

@@ -16,7 +16,7 @@
             "justMyCode": true,
             "args": [
                 "print",
-                "../tests/c/patchtests/macro_in_fn_no_vars/orig.c",
+                "../tests/define/vars/no_alt_solo/orig.c",
                 "-v"
             ],
         },
@@ -32,7 +32,7 @@
             "justMyCode": true,
             "args": [
                 "graphviz",
-                "../tests/c/patchtests/macro_sur_var_dif_type/orig.c",
+                "../tests/define/vars/no_alt_solo/orig.c",
                 "-v"
             ],
         },
@@ -48,7 +48,7 @@
             "justMyCode": true,
             "args": [
                 "patch",
-                "../tests/c/patchtests/macro_sur_fn_alt_no_args_assign/orig.c",
+                "../tests/define/vars/no_alt_solo/orig.c",
                 "-vv",
             ],
         }

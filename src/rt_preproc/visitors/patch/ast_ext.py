@@ -25,3 +25,12 @@ class VariableDeclarationMarker(Marker):
     def __init__(self, var_decl: data.VarDecl) -> None:
         super().__init__()
         self.var_decl = var_decl
+
+class PreprocDefinitionMarker(Marker):
+    field_names = []
+    children: None
+    def_decl: data.DefDecl
+
+    def __init__(self, def_decl: data.DefDecl) -> None:
+        super().__init__()
+        self.def_decl = def_decl
