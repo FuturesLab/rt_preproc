@@ -39,7 +39,12 @@ class AstNode(INode):
         """
         Get a named child by index.
         """
-        return self.children[self.children_named_idxs.index(named_index)]
+        idx = None
+        try:
+            idx = self.children_named_idxs.index(named_index)
+        except ValueError:
+            return None
+        return self.children[idx] if idx is not None else None
 
     def set_named_child(self, named_index: int, child: Self) -> None:
         """

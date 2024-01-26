@@ -74,10 +74,12 @@ class GraphVizVisitor(IVisitor):
         self,
         node: Union[
             ast.Identifier,
+            ast.TypeIdentifier,
             ast.StringContent,
             ast.NumberLiteral,
             ast.PrimitiveType,
             ast.SystemLibString,
+            ast.FieldIdentifier,
         ],
         ctx: GraphVizCtx,
     ) -> Any:
@@ -106,4 +108,5 @@ type_name_to_color = {
     "string_content": 5,
     "true": 8,
     "type_identifier": 9,
+    "field_identifier": 4,
 }

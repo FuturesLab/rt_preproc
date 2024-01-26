@@ -12,6 +12,8 @@ from rt_preproc.visitors.patch.data import (
     DefFnDecl,
     VarIdent,
     MoveUpMsg,
+    Struct,
+    StructField,
 )
 import rt_preproc.visitors.patch.ast_ext as ast_ext
 import itertools
@@ -86,7 +88,7 @@ class PatchVisitor(IVisitor):
 
     def __init__(self) -> None:
         self.macros: dict[str, str] = {}
-        self.structs: dict[str, ast.StructSpecifier] = {}
+        self.structs: dict[str, Struct] = {}
         self.fn_decls: dict[str, List[FuncDecl]] = defaultdict(list)
         self.move_to_mains: List[ast.AstNode] = []
         self.defines: dict[str, List[Union[DefDecl, DefFnDecl]]] = defaultdict(list)
@@ -268,7 +270,7 @@ class PatchVisitor(IVisitor):
                             ast.Whitespace(" "),
                             ast.Identifier(cond_macro.name),
                             ast.Whitespace(" "),
-                            ast.Unnamed("==" if cond_macro.def_cond else "!="),
+                            ast.Unnamed("==" if cond_macro.undef_cond else "!="),
                             ast.Whitespace(" "),
                             # TODO: handle other data types
                             ast.Custom("UNDEFINED_Int"),
@@ -373,7 +375,7 @@ class PatchVisitor(IVisitor):
                 ifdef_cond=Macro(
                     ctx.ifdef_cond.name,
                     ctx.ifdef_cond.type,
-                    def_cond=True,
+                    undef_cond=True,
                 ),
             ),
         )
@@ -381,13 +383,16 @@ class PatchVisitor(IVisitor):
 
     @visit.register
     def _(self, node: ast.PreprocIfdef, ctx: PatchCtx) -> MoveUpMsg:
+        undef_cond = False
+        if node.base_node.children[0].type == '#ifndef':
+            undef_cond = True
         up_msg = self.visit_children(
             node,
             PatchCtx(
                 parent=node,
                 in_ifdef=True,
                 parent_ctx=ctx,
-                ifdef_cond=Macro(node.get_named_child(0).text, "int"),
+                ifdef_cond=Macro(node.get_named_child(0).text, "int", undef_cond=undef_cond),
             ),
         )
 
@@ -422,7 +427,7 @@ class PatchVisitor(IVisitor):
             ast.Whitespace(" "),
             ast.Unnamed("("),
             node.get_named_child(0),
-            ast.Unnamed("==" if ctx.ifdef_cond and ctx.ifdef_cond.def_cond else "!="),
+            ast.Unnamed("==" if undef_cond else "!="),
             ast.Identifier("UNDEFINED_Int"),  # TODO: handle types other than int
             ast.Unnamed(")"),
             ast.Whitespace(" "),
@@ -585,7 +590,7 @@ class PatchVisitor(IVisitor):
                             body.children.insert(
                                 i + 1,
                                 ast.Custom(
-                                    f"\nassert({cond_macro.name} {'==' if cond_macro.def_cond else '!='} UNDEFINED_{cond_macro.type.capitalize()});\n"
+                                    f"\nassert({cond_macro.name} {'==' if cond_macro.undef_cond else '!='} UNDEFINED_{cond_macro.type.capitalize()});\n"
                                 ),
                             )
                         break
@@ -607,6 +612,29 @@ class PatchVisitor(IVisitor):
 
         # we consumed the var_idents here so they don't get moved up
         return MoveUpMsg(out_node, up_msg.move_ups)
+    
+    @visit.register
+    def _(self, node: ast.StructSpecifier, ctx: PatchCtx) -> MoveUpMsg:
+        up_msg = self.visit_children(node, ctx)
+        field_list = node.get_child_by_name(1)
+        if field_list is not None:
+            assert isinstance(field_list, ast.FieldDeclarationList)
+            struct = Struct(set(ctx.get_ifdef_cond_stack()))
+            for field in field_list.children:
+                if isinstance(field, ast.FieldDeclaration):
+                    self.structs[field.get_named_child(0).text] = node
+        return MoveUpMsg(None, up_msg.move_ups)
+
+    @visit.register
+    def _(self, node: ast.EnumSpecifier, ctx: PatchCtx) -> MoveUpMsg:
+        up_msg = self.visit_children(node, ctx)
+        enum_list = node.get_child_by_name(1)
+        if enum_list is not None:
+            assert isinstance(enum_list, ast.EnumeratorList)
+            for enum in enum_list.children:
+                if isinstance(enum, ast.Enumerator):
+                    self.macros[enum.get_named_child(0).text] = "int"
+        return MoveUpMsg(None, up_msg.move_ups)
 
     # General expressions...
     @visit.register

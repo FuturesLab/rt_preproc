@@ -9,7 +9,8 @@ int main(){
   #ifdef FOO
     int x = 2;
   #endif
-  #ifdef FOO
-    func(x);
+  #ifndef FOO
+    int x = 4;
   #endif
+  func(x);
 }

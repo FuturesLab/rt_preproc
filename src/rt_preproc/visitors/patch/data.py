@@ -3,18 +3,18 @@ import rt_preproc.parser.ast as ast
 from collections import defaultdict
 
 class Macro:
-    def __init__(self, name: str, type: str, def_cond: bool = False):
+    def __init__(self, name: str, type: str, undef_cond: bool = False):
         self.name = name
         self.type = type
-        self.def_cond = def_cond
+        self.undef_cond = undef_cond
 
     def __eq__(self, other: Any) -> bool:
         if not isinstance(other, Macro):
             return False
-        return self.name == other.name and self.type == other.type and self.def_cond == other.def_cond
+        return self.name == other.name and self.type == other.type and self.undef_cond == other.undef_cond
 
     def __hash__(self) -> int:
-        return hash((self.name, self.type, self.def_cond))
+        return hash((self.name, self.type, self.undef_cond))
 
 class FuncDecl:
     def __init__(self, fn_decl: ast.FunctionDeclarator, macro_set: set[Macro]):
@@ -99,3 +99,15 @@ class MoveUpMsg:
         # same for move_ups
         self.var_idents: Set[str] = set()
         self.var_idents.update(var_idents)
+
+
+class StructField:
+    def __init__(self, name: str, type: str, sub_macro_set: Optional[set[Macro]] = None) -> None:
+        self.name = name
+        self.type = type
+        self.sub_macro_set = sub_macro_set
+
+class Struct:
+    def __init__(self, macro_set: set[Macro]) -> None:
+        self.fields: List[Struct] = []
+        self.macro_set = macro_set

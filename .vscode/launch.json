@@ -48,7 +48,7 @@
             "justMyCode": true,
             "args": [
                 "patch",
-                "../tests/define/funcs/no_alt/orig.c",
+                "../tests/vars/local/decl_twice/orig.c",
                 "-vv",
             ],
         }
