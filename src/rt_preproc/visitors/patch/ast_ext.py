@@ -12,10 +12,11 @@ class VariableUsageMarker(Marker):
     field_names = []
     children: None
 
-    def __init__(self, variable: ast.Declaration, macro_set: set[data.Macro]) -> None:
+    def __init__(self, name: str, macro_set: set[data.Macro]) -> None:
         super().__init__()
-        self.variable = variable
+        self.name = name
         self.macro_set = macro_set
+
 
 class VariableDeclarationMarker(Marker):
     field_names = []

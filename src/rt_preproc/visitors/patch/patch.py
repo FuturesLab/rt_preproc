@@ -73,11 +73,13 @@ def update_if_marker(
     """
     if isinstance(node, ast_ext.Marker):
         if isinstance(node, ast_ext.VariableDeclarationMarker):
+            # ctx.var_decls[node.var_decl.name].append(node.var_decl)
             return node.var_decl.convert_to_ast(ctx.var_decls)
         elif isinstance(node, ast_ext.PreprocDefinitionMarker):
             return node.def_decl.convert_to_ast()
         elif isinstance(node, ast_ext.VariableUsageMarker):
-            raise Exception("VariableUsageMarker unimplemented")
+            # TODO: do we need this?
+            raise Exception("VariableUsageMarker not implemented yet")
         else:
             raise Exception("Unexpected marker type")
     return node
@@ -377,6 +379,7 @@ class PatchVisitor(IVisitor):
                     ctx.ifdef_cond.type,
                     undef_cond=True,
                 ),
+                var_decls=ctx.var_decls,
             ),
         )
         return MoveUpMsg(node, up_msg.move_ups)
@@ -384,7 +387,7 @@ class PatchVisitor(IVisitor):
     @visit.register
     def _(self, node: ast.PreprocIfdef, ctx: PatchCtx) -> MoveUpMsg:
         undef_cond = False
-        if node.base_node.children[0].type == '#ifndef':
+        if node.base_node.children[0].type == "#ifndef":
             undef_cond = True
         up_msg = self.visit_children(
             node,
@@ -392,7 +395,10 @@ class PatchVisitor(IVisitor):
                 parent=node,
                 in_ifdef=True,
                 parent_ctx=ctx,
-                ifdef_cond=Macro(node.get_named_child(0).text, "int", undef_cond=undef_cond),
+                ifdef_cond=Macro(
+                    node.get_named_child(0).text, "int", undef_cond=undef_cond
+                ),
+                var_decls=ctx.var_decls,
             ),
         )
 
@@ -481,23 +487,29 @@ class PatchVisitor(IVisitor):
             macro_set = set(ctx.get_ifdef_cond_stack())
             move_up_node = ast_ext.VariableDeclarationMarker(
                 VarDecl(
-                    name_node.text,
+                    name_node.text,  # FIXME: bug here, we've gotta rename this
                     type_str,
                     # TODO: handle other data types
                     ast.Identifier("UNDEFINED_Int"),
                     macro_set,
                 )
             )
+            # add to this context here, so that the declaration shows up in children
+            # we will add it to the correct parent context when the variable decl marker is found as a child (and this context will be discarded)
+            ctx.var_decls[move_up_node.var_decl.name].append(
+                move_up_node.var_decl
+            )
             up_msg.move_ups.append(move_up_node)
+
             new_node = None
 
             # if it wasn't an identifier, then the declaration was an init declarator
             if isinstance(init_decl, ast.InitDeclarator):
                 init_rhs = init_decl.get_named_child(1)
-
+                name = name_node.text
                 new_node = ast.AssignmentExpression()
                 new_node.children = [
-                    name_node,
+                    ast.Identifier(name),
                     ast.Unnamed("="),
                     init_rhs,
                     ast.Unnamed(";"),
@@ -612,7 +624,7 @@ class PatchVisitor(IVisitor):
 
         # we consumed the var_idents here so they don't get moved up
         return MoveUpMsg(out_node, up_msg.move_ups)
-    
+
     @visit.register
     def _(self, node: ast.StructSpecifier, ctx: PatchCtx) -> MoveUpMsg:
         up_msg = self.visit_children(node, ctx)
