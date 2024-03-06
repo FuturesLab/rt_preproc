@@ -1,3 +1,4 @@
+from collections.abc import Iterable
 import rt_preproc.parser.ast as ast
 from typing import Optional, List, Any, Self, Set, Union
 from multimethod import multimethod
@@ -158,7 +159,7 @@ class PatchVisitor(IVisitor):
             # a bit hacky, delete the semicolon after a call expression is converted to an if chain
             if (
                 isinstance(node.children[i], ast.CallExpression)
-                and new_node != None
+                and new_node is not None
                 and not isinstance(new_node, ast.CallExpression)
             ):
                 for j in range(i + 1, len(node.children)):
@@ -221,6 +222,72 @@ class PatchVisitor(IVisitor):
                 )
                 rename_dict[ident].append(renamed_var_ident)
         return rename_dict
+
+    def build_possible_macro_sets(
+        self,
+        macro_sets: Iterable[Set[Macro]],
+    ) -> Iterable[Set[Macro]]:
+        """
+        This function builds the set of possible macro sets from a list of macro sets.
+        The list will be the, for example, the list of sub_macro_sets from a struct.
+        We want to build the set of all possible combinations of the macro sets.
+        This means filtering down sub_macro_sets that have conflicting ifdef conditions.
+        Also, we want to merge sub_macro_sets that have the same ifdef conditions.
+        """
+        for combination in itertools.product(macro_sets):
+            new_macro_set = set(*combination)
+            # check all the combinations for conflicts
+            conflict = False
+            for macro in new_macro_set:
+                for other_macro in new_macro_set:
+                    if (
+                        macro.name == other_macro.name
+                        and macro.undef_cond != other_macro.undef_cond
+                    ):
+                        conflict = True
+                        break
+                if conflict:
+                    break
+            if not conflict:
+                yield frozenset(new_macro_set)
+
+    def struct_multiversal_duplication(
+        self,
+        struct: Struct,
+    ) -> List[ast.AstNode]:
+        """
+        This function performs multiversal duplication on a struct.
+        We build the list of possible struct versions from the fields.
+        If fields have conflicting ifdef conditions, we don't include those combinations.
+        """
+        out_struct_nodes = []
+        i = 1
+        for macro_set in self.build_possible_macro_sets(
+            itertools.chain(
+                (field.sub_macro_set for field in struct.fields if field.sub_macro_set),
+                [set()],
+            )
+        ):
+            fields = []
+            for field in struct.fields:
+                if field.sub_macro_set is None or field.sub_macro_set.issubset(
+                    macro_set
+                ):
+                    fields.append(field)
+                else:
+                    # TODO: add handling for when a condition is left undefined, and the field is not in the macro set. 
+                    # This is not a conflict
+                    continue
+            name = struct.name + "_" + str(i) if i > 1 else struct.name
+            out_struct_nodes.append(
+                ast.Custom(
+                    f"struct {name} {{\n"
+                    + "\n".join([f"  {field.type} {field.name};" for field in fields])
+                    + "\n};\n"
+                )
+            )
+            i += 1
+        return out_struct_nodes
 
     def multiversal_duplication(
         self,
@@ -496,9 +563,7 @@ class PatchVisitor(IVisitor):
             )
             # add to this context here, so that the declaration shows up in children
             # we will add it to the correct parent context when the variable decl marker is found as a child (and this context will be discarded)
-            ctx.var_decls[move_up_node.var_decl.name].append(
-                move_up_node.var_decl
-            )
+            ctx.var_decls[move_up_node.var_decl.name].append(move_up_node.var_decl)
             up_msg.move_ups.append(move_up_node)
 
             new_node = None
@@ -563,7 +628,7 @@ class PatchVisitor(IVisitor):
                 else:
                     compound_stmt.children.append(assign_node)
                 return MoveUpMsg(compound_stmt, up_msg.move_ups)
-            return MoveUpMsg(None, up_msg.move_ups)
+        return MoveUpMsg(None, up_msg.move_ups)
 
     @visit.register
     def _(self, node: ast.FunctionDefinition, ctx: PatchCtx) -> MoveUpMsg:
@@ -627,26 +692,27 @@ class PatchVisitor(IVisitor):
 
     @visit.register
     def _(self, node: ast.StructSpecifier, ctx: PatchCtx) -> MoveUpMsg:
-        up_msg = self.visit_children(node, ctx)
-        field_list = node.get_child_by_name(1)
-        if field_list is not None:
-            assert isinstance(field_list, ast.FieldDeclarationList)
-            struct = Struct(set(ctx.get_ifdef_cond_stack()))
-            for field in field_list.children:
-                if isinstance(field, ast.FieldDeclaration):
-                    self.structs[field.get_named_child(0).text] = node
-        return MoveUpMsg(None, up_msg.move_ups)
+        if any(isinstance(child, ast.FieldDeclarationList) for child in node.children):
+            struct = Struct.build_from_ast(node)
+            self.structs[struct.name] = struct
+            replace_node = ast.CompoundStatement()
+            replace_node.children = self.struct_multiversal_duplication(struct)
+            return MoveUpMsg(replace_node, var_idents=set())
+        else:
+            # TODO: replace struct name here
+            return MoveUpMsg(None, [], set())
 
-    @visit.register
-    def _(self, node: ast.EnumSpecifier, ctx: PatchCtx) -> MoveUpMsg:
-        up_msg = self.visit_children(node, ctx)
-        enum_list = node.get_child_by_name(1)
-        if enum_list is not None:
-            assert isinstance(enum_list, ast.EnumeratorList)
-            for enum in enum_list.children:
-                if isinstance(enum, ast.Enumerator):
-                    self.macros[enum.get_named_child(0).text] = "int"
-        return MoveUpMsg(None, up_msg.move_ups)
+    # TODO: implement enums
+    # @visit.register
+    # def _(self, node: ast.EnumSpecifier, ctx: PatchCtx) -> MoveUpMsg:
+    #     up_msg = self.visit_children(node, ctx)
+    #     enum_list = node.get_child_by_name(1)
+    #     if enum_list is not None:
+    #         assert isinstance(enum_list, ast.EnumeratorList)
+    #         for enum in enum_list.children:
+    #             if isinstance(enum, ast.Enumerator):
+    #                 self.macros[enum.get_named_child(0).text] = "int"
+    #     return MoveUpMsg(None, up_msg.move_ups)
 
     # General expressions...
     @visit.register

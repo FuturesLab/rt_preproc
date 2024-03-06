@@ -2,6 +2,7 @@ from typing import Optional, List, Any, Self, Set
 import rt_preproc.parser.ast as ast
 from collections import defaultdict
 
+
 class Macro:
     def __init__(self, name: str, type: str, undef_cond: bool = False):
         self.name = name
@@ -11,21 +12,30 @@ class Macro:
     def __eq__(self, other: Any) -> bool:
         if not isinstance(other, Macro):
             return False
-        return self.name == other.name and self.type == other.type and self.undef_cond == other.undef_cond
+        return (
+            self.name == other.name
+            and self.type == other.type
+            and self.undef_cond == other.undef_cond
+        )
 
     def __hash__(self) -> int:
         return hash((self.name, self.type, self.undef_cond))
+
 
 class FuncDecl:
     def __init__(self, fn_decl: ast.FunctionDeclarator, macro_set: set[Macro]):
         self.fn_decl = fn_decl
         self.macro_set = macro_set
 
+
 class VarIdent:
-    def __init__(self, name: str, macro_set: set[Macro], orig_name: Optional[str] = None):
+    def __init__(
+        self, name: str, macro_set: set[Macro], orig_name: Optional[str] = None
+    ):
         self.name = name
         self.macro_set = macro_set
         self.orig_name = orig_name
+
 
 class VarDecl:
     def __init__(
@@ -38,7 +48,7 @@ class VarDecl:
 
     def convert_to_ast(self, var_decls: dict[str, List[Self]]) -> ast.AstNode:
         name = self.name
-        if (len(var_decls[self.name]) > 1):
+        if len(var_decls[self.name]) > 1:
             name = self.name + "_" + str(len(var_decls[self.name]))
         new_node = ast.Declaration()
         if self.val is None:
@@ -60,9 +70,12 @@ class VarDecl:
             ast.Custom(";"),
         ]
         return new_node
-    
+
+
 class DefDecl:
-    def __init__(self, name: str, val: str, macro_set: set[Macro], orig_name: str = None):
+    def __init__(
+        self, name: str, val: str, macro_set: set[Macro], orig_name: str = None
+    ):
         self.name = name
         self.val = val
         self.macro_set = macro_set
@@ -72,8 +85,16 @@ class DefDecl:
         new_node = ast.Custom(f"#define {self.name} {self.val}\n")
         return new_node
 
+
 class DefFnDecl:
-    def __init__(self, name: str, params: ast.PreprocParams, val: str, macro_set: set[Macro], orig_name: str = None):
+    def __init__(
+        self,
+        name: str,
+        params: ast.PreprocParams,
+        val: str,
+        macro_set: set[Macro],
+        orig_name: str = None,
+    ):
         self.name = name
         self.params = params
         self.val = val
@@ -84,12 +105,15 @@ class DefFnDecl:
         new_node = ast.Custom(f"#define {self.name}{str(self.params)} {self.val}\n")
         return new_node
 
+
 class MoveUpMsg:
     def __init__(
         self,
         node: Optional[ast.AstNode] = None,
         move_up_nodes: List[ast.AstNode] = [],
-        var_idents: Set[str] = set(), # these are variable identifers that are compile-time variable
+        var_idents: Set[
+            str
+        ] = set(),  # these are variable identifers that are compile-time variable
     ) -> None:
         self.node = node
 
@@ -102,12 +126,67 @@ class MoveUpMsg:
 
 
 class StructField:
-    def __init__(self, name: str, type: str, sub_macro_set: Optional[set[Macro]] = None) -> None:
+    def __init__(
+        self, name: str, type: str, sub_macro_set: Optional[set[Macro]] = None
+    ) -> None:
         self.name = name
         self.type = type
         self.sub_macro_set = sub_macro_set
 
+
 class Struct:
-    def __init__(self, macro_set: set[Macro]) -> None:
-        self.fields: List[Struct] = []
+    def __init__(
+        self,
+        macro_set: Optional[frozenset[Macro]] = None,
+        fields: List[StructField] = None,
+        name: str = None,
+    ) -> None:
+        self.fields = fields or []
         self.macro_set = macro_set
+        self.name = name
+
+    def build_from_ast(
+        node: ast.StructSpecifier, macro_set: Optional[frozenset[Macro]] = None
+    ) -> Self:
+        if not node.children:
+            return Struct(macro_set=macro_set)
+        # TODO: we don't handle nested ifdefs here yet
+        struct = Struct(macro_set=macro_set)
+        type_ident = node.get_named_child(0)
+        if isinstance(type_ident, ast.TypeIdentifier):
+            struct.name = str(type_ident)
+            field_list = node.get_named_child(1)
+            assert isinstance(field_list, ast.FieldDeclarationList)
+            for child in field_list.children:
+                if isinstance(child, ast.FieldDeclaration):
+                    type = child.get_named_child(0)
+                    field_ident = child.get_named_child(1)
+                    struct.fields.append(
+                        StructField(name=str(field_ident), type=str(type))
+                    )
+
+                elif isinstance(child, ast.PreprocIfdef):
+                    ident = child.get_named_child(0)
+                    assert isinstance(ident, ast.Identifier)
+                    field_decl = child.get_named_child(1)
+                    assert isinstance(field_decl, ast.FieldDeclaration)
+                    type = field_decl.get_named_child(0)
+                    field_ident = field_decl.get_named_child(1)
+                    # TODO: handle #else  
+                    struct.fields.append(
+                        StructField(
+                            name=str(field_ident),
+                            type=str(type),
+                            sub_macro_set=frozenset([Macro(str(ident), "int")]),
+                        )
+                    )
+
+                elif isinstance(child, ast.Unnamed) or isinstance(
+                    child, ast.Whitespace
+                ):
+                    continue
+                else:
+                    raise NotImplementedError("Encountered unknown AST in field list")
+        else:
+            raise NotImplementedError("Build from AST not handling this")
+        return struct

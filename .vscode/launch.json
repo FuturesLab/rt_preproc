@@ -48,7 +48,7 @@
             "justMyCode": true,
             "args": [
                 "patch",
-                "../tests/vars/local/decl_twice/orig.c",
+                "../tests/structs/decl/orig.c",
                 "-vv",
             ],
         }
