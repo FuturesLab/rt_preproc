@@ -15,4 +15,7 @@ int main(){
     s->y = 2;
   #endif
   printf("%d ", s->x);
+  #ifdef FOO
+    printf("%d", s->y);
+  #endif
 }

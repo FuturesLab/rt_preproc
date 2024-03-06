@@ -275,7 +275,7 @@ class PatchVisitor(IVisitor):
                 ):
                     fields.append(field)
                 else:
-                    # TODO: add handling for when a condition is left undefined, and the field is not in the macro set. 
+                    # TODO: add handling for when a condition is left undefined, and the field is not in the macro set.
                     # This is not a conflict
                     continue
             name = struct.name + "_" + str(i) if i > 1 else struct.name
@@ -510,9 +510,17 @@ class PatchVisitor(IVisitor):
             ast.Whitespace("\n"),
         ]
         # TODO: this will not work if we don't handle the named children modification correctly
-        if node.get_child_by_name("alternative") is not None:
-            # TODO handle else if
-            alt = node.get_child_by_name("alternative")
+        alt_base = node.get_child_by_name("alternative")
+        if alt_base is not None:
+            alt = None
+            for child in node.children:
+                if (
+                    isinstance(child, ast.PreprocElif)
+                    or isinstance(child, ast.PreprocElifdef)
+                    or isinstance(child, ast.PreprocElse)
+                ):
+                    alt = child
+                    break
             if isinstance(alt, ast.PreprocElse):
                 new_node.children.extend(
                     [
@@ -528,6 +536,8 @@ class PatchVisitor(IVisitor):
                         ast.Whitespace("\n"),
                     ]
                 )
+            else:
+                raise Exception("Unexpected alternative: " + str(alt_base))
         if isinstance(ctx.parent, ast.TranslationUnit):
             # if this is a top level ifdef, we need to move what this would become to the main function
             self.move_to_mains.append(new_node)
